@@ -1,6 +1,6 @@
 {
-    "name": "my-massa-sc",
-    "version": "0.0.2",
+    "name": "predict-exe",
+    "version": "0.1.0",
     "description": "",
     "main": "index.js",
     "scripts": {
