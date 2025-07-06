@@ -1,4 +1,4 @@
-# Predict.exe – Autonomous DeFi Prediction Markets on Massa
+# Predict.exe
 
 *The project is actively under development*
 
