@@ -135,11 +135,10 @@ export function resolveMarket(binaryArgs: StaticArray<u8>): void {
 
   // Update storage
   Storage.set(stringToBytes(`market_${marketId}`), marketData.serialize());
-  
   generateEvent(`Market ${marketId} resolved: current=${currentPrice}, target=${targetPrice}, outcome=${outcome ? "YES" : "NO"}`);
 }
 
 export function getCurrentPrice(_: StaticArray<u8>): StaticArray<u8> {
   const price = getWmasPrice();
-  return new Args().add(price).serialize();
+  return stringToBytes(price.toString());
 }

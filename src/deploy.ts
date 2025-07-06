@@ -14,9 +14,8 @@ const provider = JsonRpcProvider.buildnet(account);
 console.log('Deploying contract...');
 
 const byteCode = getScByteCode('build', 'main.wasm');
-
-const name = 'Massa';
-const constructorArgs = new Args().addString(name);
+ 
+const constructorArgs = new Args();
 
 const contract = await SmartContract.deploy(
   provider,
