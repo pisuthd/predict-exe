@@ -18,19 +18,16 @@ const MIN_PREDICTION_HOURS: u64 = 1; // 1 hour minimum
 
 
 // Storage Keys
-const ACTIVE_MARKETS_COUNT_KEY = "active_markets_count_pre01";
-const MARKET_COUNTER_KEY = "market_counter_pre01";
-const MONITOR_ACTIVE_KEY = "monitor_active_pre01";
-
+const MARKET_COUNTER_KEY = "market_counter";
+const MONITOR_ACTIVE_KEY = "monitor_active";
 
 export function constructor(binaryArgs: StaticArray<u8>): void {
   assert(Context.isDeployingContract());
 
-  Storage.set(ACTIVE_MARKETS_COUNT_KEY, "0");
   Storage.set(MARKET_COUNTER_KEY, "0");
   Storage.set(MONITOR_ACTIVE_KEY, "false");
 
-  enableMockPrice(false);
+  enableMockPrice(true);
   setMockPrice(1.0);
 
   generateEvent("PredictionMarket contract deployed");
@@ -84,6 +81,15 @@ export function toggleMockPrice(binaryArgs: StaticArray<u8>): void {
   enableMockPrice(enable);
 }
 
+// Price management functions
+// TODO: allows only admin should change this
+export function setMockPriceAdmin(binaryArgs: StaticArray<u8>): void {
+  const args = new Args(binaryArgs);
+  const price = args.nextF64().expect("Price is required");
+  
+  setMockPrice(price);
+}
+
 // View functions
 export function getMarket(binaryArgs: StaticArray<u8>): StaticArray<u8> {
   const args = new Args(binaryArgs);
@@ -109,9 +115,9 @@ export function resolveMarket(binaryArgs: StaticArray<u8>): void {
   const market_key = Storage.get(stringToBytes(`market_${marketId}`));
   const market_data = new Args(market_key);
 
-  const _owner = market_data.nextString().unwrap();
+  market_data.nextString();
   const targetPrice =  market_data.nextF64().unwrap();
-  const _oldCurrentPrice =  market_data.nextF64().unwrap();
+  market_data.nextF64();
   const expirationPeriod = market_data.nextU64().unwrap();
   const currentPeriod = market_data.nextU64().unwrap();
 
@@ -121,17 +127,15 @@ export function resolveMarket(binaryArgs: StaticArray<u8>): void {
   marketData.add(currentPrice); // current price
   marketData.add(expirationPeriod);
   marketData.add(currentPeriod);
-  marketData.add(true); // resolved
-  marketData.add(false); // true = YES (price >= target), false = NO (price < target)
 
   const outcome = currentPrice >= targetPrice;
 
-  marketData.add(false); // resolved
+  marketData.add(true); // resolved
   marketData.add(outcome); // true = YES (price >= target), false = NO (price < target)
 
   // Update storage
   Storage.set(stringToBytes(`market_${marketId}`), marketData.serialize());
-
+  
   generateEvent(`Market ${marketId} resolved: current=${currentPrice}, target=${targetPrice}, outcome=${outcome ? "YES" : "NO"}`);
 }
 
