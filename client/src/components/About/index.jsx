@@ -20,18 +20,18 @@ const About = () => {
                 width="100%"
                 padding="0px 5px"
             >
-                <Fieldset legend="Predict.exe - Oracle-Free Prediction Markets" >
+                <Fieldset legend="Predict.exe – Autonomous DeFi Prediction Markets" >
                     <div>
-                        Predict.exe is a pure on-chain prediction market platform on the Massa Network. Create and trade predictions based on verifiable blockchain metrics without oracles. Autonomous Smart Contracts (ASC) automatically settle markets using Dusa DEX data, network stats, and token metrics.
-                        <br/><br/>
+                        Predict.exe is a pure on-chain prediction market on Massa Network. Leveraging Massa's Autonomous Smart Contracts, markets execute trustlessly with no manual intervention. 
+                        <br /><br />
                         <strong>Features:</strong>
-                        <br/>• Price predictions using Dusa DEX data
-                        <br/>• Network performance markets  
-                        <br/>• DeFi adoption tracking
-                        <br/>• Automatic settlement via ASC
-                        <br/>• No oracle dependencies
+                        <br />• On-chain price data via Dusa DEX
+                        <br />• Off-chain oracle data via Umbrella Network
+                        <br />• Automated settlement via ASC
+                        <br />• Fully decentralized and transparent
+                        <br />• No manual intervention or admin keys
                     </div>
-                </Fieldset> 
+                </Fieldset>
 
             </Frame>
         </>
