@@ -77,15 +77,15 @@ export function isUsingMockPrice(): bool {
 
 // Market timing utilities
 export function isMarketExpired(expirationPeriod: u64): bool {
-     return Context.currentPeriod() >= expirationPeriod;
+    return Context.currentPeriod() >= expirationPeriod;
 }
 
 export function periodsToHours(periods: u64): f64 {
-     // Assuming ~2 periods per minute on average
-     return f64(periods) / 120.0;
+    // Assuming ~2 periods per minute on average
+    return f64(periods) / 120.0;
 }
 
 export function hoursToPeriods(hours: f64): u64 {
-     // Convert hours to periods (120 periods ≈ 1 hour)
+    // Convert hours to periods (120 periods ≈ 1 hour)
     return u64(hours * 120.0);
 }
