@@ -7,6 +7,8 @@ import Desktop from "./components/Desktop"
 import '@react95/core/GlobalStyle';
 import '@react95/core/themes/win95.css';
 
+import AccountProvider from "./contexts/account"
+
 const AppContainer = styled.div`
   height: 100vh;
   width: 100vw;
@@ -36,7 +38,7 @@ function App() {
       // Handle closing specific market detail modal
       const marketId = name.replace('projectDetails_', '');
       setOpenMarkets(prev => prev.filter(market => market.id !== marketId));
-      
+
       // If we're closing the active modal, clear active state
       if (activeModalId === name) {
         setActiveModalId(null);
@@ -44,7 +46,7 @@ function App() {
     } else {
       // Handle closing other modals
       setModals(prev => ({ ...prev, [name]: false }));
-      
+
       // If we're closing the active modal, clear active state
       if (activeModalId === name) {
         setActiveModalId(null);
@@ -55,27 +57,27 @@ function App() {
   const toggleModal = (name) => {
     setModals(prev => {
       const newState = { ...prev, [name]: !prev[name] };
-      
+
       // If opening a modal, make it active
       if (newState[name]) {
         setActiveModalId(name);
       }
-      
+
       return newState;
     });
   };
 
   const handleProjectClick = (market) => {
     const modalId = `projectDetails_${market.id}`;
-    
+
     // Check if this market is already open
     const isAlreadyOpen = openMarkets.some(openMarket => openMarket.id === market.id);
-    
+
     if (!isAlreadyOpen) {
       // Add market to openMarkets array
       setOpenMarkets(prev => [...prev, market]);
     }
-    
+
     // Always set this modal as active (bring to front)
     setActiveModalId(modalId);
   };
@@ -106,24 +108,26 @@ function App() {
   };
 
   return (
-    <AppContainer>
-      <DesktopArea>
-        <Desktop
-          projects={markets}
-          onProjectClick={handleProjectClick}
+    <AccountProvider>
+      <AppContainer>
+        <DesktopArea>
+          <Desktop
+            projects={markets}
+            onProjectClick={handleProjectClick}
+          />
+        </DesktopArea>
+        <Taskbar
+          modals={modals}
+          closeModal={closeModal}
+          toggleModal={toggleModal}
+          onProjectSubmit={handleProjectSubmit}
+          isWalletConnected={isWalletConnected}
+          onWalletToggle={handleWalletToggle}
+          openMarkets={openMarkets}
+          activeModalId={activeModalId}
         />
-      </DesktopArea>
-      <Taskbar
-        modals={modals}
-        closeModal={closeModal}
-        toggleModal={toggleModal}
-        onProjectSubmit={handleProjectSubmit}
-        isWalletConnected={isWalletConnected}
-        onWalletToggle={handleWalletToggle}
-        openMarkets={openMarkets}
-        activeModalId={activeModalId}
-      />
-    </AppContainer>
+      </AppContainer>
+    </AccountProvider>
   );
 }
 

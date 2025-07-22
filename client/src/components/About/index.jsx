@@ -21,18 +21,18 @@ const About = () => {
                 padding="0px 5px"
             >
                 <Fieldset legend="Predict.exe – Autonomous DeFi Prediction Markets" >
-                    <div>
+                    <div style={{ paddingBottom: "10px" }}>
                         Predict.exe is a pure on-chain prediction market on Massa Network. Leveraging Massa's Autonomous Smart Contracts, markets execute trustlessly with no manual intervention.
                         <br /><br />
                         <strong>Features:</strong>
-                        <br />• Create a market based on verifiable on-chain data  
+                        <br />• Create a market based on verifiable on-chain data
                         <br />• Such as data from Dusa DEX or Umbrella Network
-                        <br />• Automated settlement via ASC  
-                        <br />• Fully decentralized and transparent  
-                        {/* <br />• No manual intervention or admin keys */}
+                        <br />• Automated settlement via ASC
+                        <br />• Fully decentralized and transparent
+                        <br /><br />
+                        <em>Live on Buildnet and supports MassaStation wallet only.</em>
                     </div>
-                </Fieldset>
-
+                </Fieldset> 
             </Frame>
         </>
     )
