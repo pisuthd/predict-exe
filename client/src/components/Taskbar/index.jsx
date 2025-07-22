@@ -1,9 +1,10 @@
 import { useState, useEffect, useContext } from "react"
 import { Modal, TaskBar, List, TitleBar } from "@react95/core"
-import { WindowsExplorer, ReaderClosed, Computer3, InfoBubble, Bulb, Mailnews21, Progman1, Ulclient1002, Globe } from "@react95/icons";
+import { Forbidden, WindowsExplorer, Write1, Password1000, Computer3, InfoBubble, Bulb, Mailnews21, Progman1, Ulclient1002, Globe } from "@react95/icons";
 import About from "../About"
 import ProjectWizard from "../ProjectWizard"
 import ProjectDetails from "../ProjectDetails"
+import WalletInfo from "../WalletInfo";
 import { getWallets } from "@massalabs/wallet-provider";
 import { AccountContext } from "../../contexts/account";
 
@@ -48,10 +49,11 @@ const TaskbarContainer = ({
         const basePositions = {
             about: { x: 80, y: 40 },
             newProject: { x: 150, y: 100 },
-            projectDetails: { x: 200, y: 150 }
+            projectDetails: { x: 200, y: 150 },
+            walletInfo: { x: 250, y: 0 } // Add this line
         };
 
-        const base = basePositions[type] || basePositions.default;
+        const base = basePositions[type] || basePositions.default || { x: 100, y: 50 }; // Add default fallback
         const offset = index * 30; // Stagger by 30px each
 
         return {
@@ -90,6 +92,23 @@ const TaskbarContainer = ({
                 height: "450px",
                 dragOptions: {
                     defaultPosition: getDynamicPosition(1, 'newProject')
+                }
+            }
+        },
+        walletInfo: {
+            component: (
+                <WalletInfo
+                    onCopyAddress={(address) => navigator.clipboard.writeText(address)} // Add this for copy
+                    onClose={() => closeModal("walletInfo")}
+                />
+            ),
+            props: {
+                icon: <Password1000 variant="32x32_4" />,
+                title: "Wallet Information",
+                titleBarOptions: [<TitleBar.Close key="close" onClick={() => closeModal("walletInfo")} />],
+                width: "400px",
+                dragOptions: {
+                    defaultPosition: getDynamicPosition(2, 'walletInfo')
                 }
             }
         }
@@ -178,88 +197,90 @@ const TaskbarContainer = ({
             {renderModals()}
 
             <TaskBar list={<List>
-                <List.Item icon={<InfoBubble variant="32x32_4" />}>
-                    <List>
-                        <List.Item
-                            icon={<InfoBubble variant="32x32_4" />}
-                            onClick={() => toggleModal("newProject")}
-                        >
-                            Blackjack
-                        </List.Item>
-                        <List.Item
-                            icon={<InfoBubble variant="32x32_4" />}
-                            onClick={() => toggleModal("newProject")}
-                        >
-                            Minesweeper
-                        </List.Item>
-                    </List>
-                    Available Markets<span style={{ marginRight: "20px" }} />
-                </List.Item>
-                <List.Item
-                    icon={<InfoBubble variant="32x32_4" />}
-                    onClick={() => toggleModal("newProject")}
-                >
-                    Create Market
-                </List.Item>
-                <List.Item
-                    icon={<InfoBubble variant="32x32_4" />}
-                    onClick={() => toggleModal("about")}
-                >
-                    About
-                </List.Item>
-                <List.Item
-                    icon={<InfoBubble variant="32x32_4" />}
-                    onClick={() => toggleModal("about")}
-                >
-                    Settings
-                </List.Item>
-                <List.Divider />
-
                 {!account && (
-                    <List.Item icon={<Mailnews21 variant="32x32_4" />}>
-                        <List>
-                            {/* <List.Item icon={<Progman1 variant="32x32_4" />}>
-                                <List>
-                                    {accounts.map((account, index) => {
-                                        const shortAddress = `${account.address.slice(0, 6)}...${account.address.slice(-4)}`;
-                                        return (
-                                            <List.Item
-                                                key={index}
-                                                icon={<Ulclient1002 variant="32x32_4" />}
-                                                onClick={() => connect(account)}
-                                            >
-                                                {account.accountName} ({shortAddress})
-                                            </List.Item>
-                                        );
-                                    })}
-                                </List>
-                                MassaStation<span style={{ marginRight: "20px" }} />
-                            </List.Item> */}
-                            {accounts.map((account, index) => {
-                                const shortAddress = `${account.address.slice(0, 6)}...${account.address.slice(-4)}`;
-                                return (
+                    <>
+                        <List.Item icon={<Mailnews21 variant="32x32_4" />}>
+                            <List>
+                                {accounts.length === 0 && (
                                     <List.Item
-                                        key={index}
-                                        icon={<Ulclient1002 variant="32x32_4" />}
-                                        onClick={() => connect(account)}
+                                        icon={<Forbidden variant="32x32_4" />}
                                     >
-                                        {account.accountName} ({shortAddress})
+                                        None
                                     </List.Item>
-                                );
-                            })}
-                        </List>
-                        Choose Account
-                    </List.Item>
+                                )}
+                                {accounts.map((account, index) => {
+                                    const shortAddress = `${account.address.slice(0, 6)}...${account.address.slice(-4)}`;
+                                    return (
+                                        <List.Item
+                                            key={index}
+                                            icon={<Ulclient1002 variant="32x32_4" />}
+                                            onClick={() => connect(account)}
+                                        >
+                                            {account.accountName} ({shortAddress})
+                                        </List.Item>
+                                    );
+                                })}
+                            </List>
+                            Choose Account<span style={{ marginRight: "20px" }} />
+                        </List.Item>
+                        <List.Divider />
+                        <List.Item
+                            icon={<InfoBubble variant="32x32_4" />}
+                            onClick={() => toggleModal("about")}
+                        >
+                            About
+                        </List.Item>
+                    </>
                 )
 
                 }
+
                 {account && (
-                    <List.Item
-                        icon={<Computer3 variant="32x32_4" />}
-                        onClick={(() => disconnect())}
-                    >
-                        Shut Down...
-                    </List.Item>
+                    <>
+                        <List.Item
+                            icon={<Write1 variant="32x32_4" />}
+                            onClick={() => toggleModal("newProject")}
+                        >
+                            New Market
+                        </List.Item>
+                        <List.Item icon={<WindowsExplorer variant="32x32_4" />}>
+                            <List>
+                                <List.Item
+                                    icon={<InfoBubble variant="32x32_4" />}
+                                    onClick={() => toggleModal("newProject")}
+                                >
+                                    Blackjack
+                                </List.Item>
+                                <List.Item
+                                    icon={<InfoBubble variant="32x32_4" />}
+                                    onClick={() => toggleModal("newProject")}
+                                >
+                                    Minesweeper
+                                </List.Item>
+                            </List>
+                            Available Markets<span style={{ marginRight: "20px" }} />
+                        </List.Item>
+
+                        <List.Item
+                            icon={<Password1000 variant="32x32_4" />}
+                            onClick={() => toggleModal("walletInfo")}
+                        >
+                            My Wallet
+                        </List.Item>
+                        <List.Item
+                            icon={<InfoBubble variant="32x32_4" />}
+                            onClick={() => toggleModal("about")}
+                        >
+                            About
+                        </List.Item>
+                        <List.Divider />
+                        <List.Item
+                            icon={<Computer3 variant="32x32_4" />}
+                            onClick={(() => disconnect())}
+                        >
+                            Shut Down...
+                        </List.Item>
+                    </>
                 )}
             </List>} />
         </div >

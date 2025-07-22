@@ -27,7 +27,8 @@ function App() {
   const [markets, setMarkets] = useState(mockMarkets);
   const [modals, setModals] = useState({
     about: true,
-    newProject: false
+    newProject: false,
+    walletInfo: false
   });
   const [openMarkets, setOpenMarkets] = useState([]); // Array of markets with open detail modals
   const [isWalletConnected, setIsWalletConnected] = useState(false);
