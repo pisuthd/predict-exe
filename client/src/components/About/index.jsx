@@ -20,7 +20,7 @@ const About = () => {
                 width="100%"
                 padding="0px 5px"
             >
-                <Fieldset legend="Predict.exe – Autonomous DeFi Prediction Markets" >
+                <Fieldset legend="About Predict.exe" >
                     <div style={{ paddingBottom: "10px" }}>
                         Predict.exe is a pure on-chain prediction market on Massa Network. Leveraging Massa's Autonomous Smart Contracts, markets execute trustlessly with no manual intervention.
                         <br /><br />
@@ -32,7 +32,7 @@ const About = () => {
                         <br /><br />
                         <em>Live on Buildnet and supports MassaStation wallet only.</em>
                     </div>
-                </Fieldset> 
+                </Fieldset>
             </Frame>
         </>
     )

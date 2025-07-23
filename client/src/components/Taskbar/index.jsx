@@ -89,7 +89,6 @@ const TaskbarContainer = ({
                 title: "Create New Prediction Market",
                 titleBarOptions: [<TitleBar.Close key="close" onClick={() => closeModal("newProject")} />],
                 width: "500px",
-                height: "450px",
                 dragOptions: {
                     defaultPosition: getDynamicPosition(1, 'newProject')
                 }
@@ -204,8 +203,9 @@ const TaskbarContainer = ({
                                 {accounts.length === 0 && (
                                     <List.Item
                                         icon={<Forbidden variant="32x32_4" />}
+                                        style={{ width: "200px" }}
                                     >
-                                        None
+                                        No MassaStation Wallet
                                     </List.Item>
                                 )}
                                 {accounts.map((account, index) => {
@@ -214,7 +214,10 @@ const TaskbarContainer = ({
                                         <List.Item
                                             key={index}
                                             icon={<Ulclient1002 variant="32x32_4" />}
-                                            onClick={() => connect(account)}
+                                            onClick={() => {
+                                                connect(account)
+                                                toggleModal("walletInfo")
+                                            }}
                                         >
                                             {account.accountName} ({shortAddress})
                                         </List.Item>
@@ -237,13 +240,8 @@ const TaskbarContainer = ({
 
                 {account && (
                     <>
-                        <List.Item
-                            icon={<Write1 variant="32x32_4" />}
-                            onClick={() => toggleModal("newProject")}
-                        >
-                            New Market
-                        </List.Item>
-                        <List.Item icon={<WindowsExplorer variant="32x32_4" />}>
+
+                        <List.Item style={{ width: "180px" }} icon={<WindowsExplorer variant="32x32_4" />}>
                             <List>
                                 <List.Item
                                     icon={<InfoBubble variant="32x32_4" />}
@@ -259,6 +257,13 @@ const TaskbarContainer = ({
                                 </List.Item>
                             </List>
                             Available Markets<span style={{ marginRight: "20px" }} />
+                        </List.Item>
+
+                        <List.Item
+                            icon={<Write1 variant="32x32_4" />}
+                            onClick={() => toggleModal("newProject")}
+                        >
+                            Create New Market
                         </List.Item>
 
                         <List.Item
