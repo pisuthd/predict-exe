@@ -8,6 +8,7 @@ import '@react95/core/GlobalStyle';
 import '@react95/core/themes/win95.css';
 
 import AccountProvider from "./contexts/account"
+import MarketProvider from "./contexts/market"
 
 const AppContainer = styled.div`
   height: 100vh;
@@ -24,6 +25,7 @@ const DesktopArea = styled.div`
 `;
 
 function App() {
+
   const [markets, setMarkets] = useState(mockMarkets);
   const [modals, setModals] = useState({
     about: true,
@@ -31,7 +33,6 @@ function App() {
     walletInfo: false
   });
   const [openMarkets, setOpenMarkets] = useState([]); // Array of markets with open detail modals
-  const [isWalletConnected, setIsWalletConnected] = useState(false);
   const [activeModalId, setActiveModalId] = useState(null); // Track which modal is currently active
 
   const closeModal = (name) => {
@@ -103,32 +104,28 @@ function App() {
     closeModal('newProject');
   };
 
-  const handleWalletToggle = () => {
-    setIsWalletConnected(prev => !prev);
-    // Add actual wallet connection logic here
-  };
 
   return (
-    <AccountProvider>
-      <AppContainer>
-        <DesktopArea>
-          <Desktop
-            projects={markets}
-            onProjectClick={handleProjectClick}
+    <MarketProvider>
+      <AccountProvider>
+        <AppContainer>
+          <DesktopArea>
+            <Desktop
+              projects={markets}
+              onProjectClick={handleProjectClick}
+            />
+          </DesktopArea>
+          <Taskbar
+            modals={modals}
+            closeModal={closeModal}
+            toggleModal={toggleModal}
+            onProjectSubmit={handleProjectSubmit}
+            openMarkets={openMarkets}
+            activeModalId={activeModalId}
           />
-        </DesktopArea>
-        <Taskbar
-          modals={modals}
-          closeModal={closeModal}
-          toggleModal={toggleModal}
-          onProjectSubmit={handleProjectSubmit}
-          isWalletConnected={isWalletConnected}
-          onWalletToggle={handleWalletToggle}
-          openMarkets={openMarkets}
-          activeModalId={activeModalId}
-        />
-      </AppContainer>
-    </AccountProvider>
+        </AppContainer>
+      </AccountProvider>
+    </MarketProvider>
   );
 }
 

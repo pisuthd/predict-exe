@@ -7,15 +7,14 @@ import ProjectDetails from "../ProjectDetails"
 import WalletInfo from "../WalletInfo";
 import { getWallets } from "@massalabs/wallet-provider";
 import { AccountContext } from "../../contexts/account";
+import { MarketContext } from "../../contexts/market";
 
 const TaskbarContainer = ({
     modals,
     closeModal,
     toggleModal,
     selectedProject,
-    onProjectSubmit,
-    isWalletConnected = false,
-    onWalletToggle = () => { },
+    onProjectSubmit,  
     openMarkets = [], // Array of currently open market detail modals
     activeModalId = null // ID of the currently active modal
 }) => {
@@ -23,10 +22,13 @@ const TaskbarContainer = ({
     const [accounts, setAccounts] = useState([])
 
     const { account, connect, disconnect, setProvider } = useContext(AccountContext)
+    const { markets } = useContext(MarketContext)
 
     useEffect(() => {
         checkWallet()
     }, [])
+
+    console.log("markets:", markets)
 
     const checkWallet = async () => {
         // Get list of available wallets

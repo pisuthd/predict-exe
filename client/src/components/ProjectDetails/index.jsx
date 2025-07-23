@@ -5,7 +5,6 @@ import { bytesToStr, JsonRPCClient } from "@massalabs/massa-web3";
 
 const sc_addr = "AS14PLuYx1BKQ4hjZqxAvto52QWp4Qp2Wk8DAqHoktvkTJfJkDFy";
 
-
 const DetailsContainer = styled.div`
   padding: 16px;
   display: flex;
