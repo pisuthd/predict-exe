@@ -1,7 +1,7 @@
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useReducer, useState } from "react"
 import { Account, JsonRpcProvider, SmartContract, Args, bytesToArray, bytesToStr, bytesToSerializableObjectArray } from '@massalabs/massa-web3'
-import { Market } from "../data/market"
+ 
 
 export const MarketContext = createContext({})
 
