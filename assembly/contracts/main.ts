@@ -1,4 +1,7 @@
-import { Context, generateEvent, Storage, transferredCoins, transferCoins, balance } from '@massalabs/massa-as-sdk';
+import {
+    Context, generateEvent, Storage, transferredCoins, transferCoins, balance, asyncCall,
+    Slot
+} from '@massalabs/massa-as-sdk';
 import { Args, u64ToBytes, stringToBytes, bytesToU64 } from '@massalabs/as-types';
 import {
     ownerAddress,
@@ -7,6 +10,10 @@ import {
 
 // Constants
 const ID_COUNTER_KEY = stringToBytes('M');
+const ASYNC_CALL_GAS: u64 = 2100_000;
+const ASYNC_CALL_FEE: u64 = 1;
+const GENESIS_TIMESTAMP: u64 = 1705312800000; // Massa genesis timestamp
+const T0: u64 = 16000; // 16 seconds per period in milliseconds
 
 export function constructor(_: StaticArray<u8>): void {
     if (!Context.isDeployingContract()) return;
@@ -22,7 +29,7 @@ export function createMarket(binaryArgs: StaticArray<u8>): StaticArray<u8> {
     const direction = args.nextBool().expect("Direction is required"); // true = "reach", false = "drop"
     const targetPrice = args.nextF64().expect("Target price is required");
     const currentPrice = args.nextF64().expect("Current price is required");
-    const expirationPeriod = args.nextU64().expect("Expiration period is required");
+    const expirationTimestamp = args.nextU64().expect("Expiration period is required");
     const dataSource = args.nextString().expect("Data source is required");
     const creatorPosition = args.nextBool().expect("Creator position is required"); // true = "YES", false = "NO"
 
@@ -31,8 +38,9 @@ export function createMarket(binaryArgs: StaticArray<u8>): StaticArray<u8> {
     assert(creatorStake >= 1000000000, "Minimum stake is 1 MAS"); // 1 MAS = 10^9 smallest units
 
     // Validation
-    const currentPeriod = Context.timestamp();
-    assert(expirationPeriod > currentPeriod, "Expiration must be in the future");
+    const currentTimestamp = Context.timestamp();
+    assert(expirationTimestamp > currentTimestamp, "Expiration must be in the future");
+    assert(expirationTimestamp <= currentTimestamp + (30 * 24 * 60 * 60 * 1000), "Expiration cannot be more than 1 month from now");
 
     // Validate direction logic
     if (direction) { // direction === true (reach)
@@ -63,8 +71,8 @@ export function createMarket(binaryArgs: StaticArray<u8>): StaticArray<u8> {
     marketData.add(direction); // true = "reach", false = "drop"
     marketData.add(targetPrice); // target price
     marketData.add(currentPrice); // reference price at creation
-    marketData.add(expirationPeriod); // when prediction ends
-    marketData.add(currentPeriod); // when market was created
+    marketData.add(expirationTimestamp); // when prediction ends
+    marketData.add(currentTimestamp); // when market was created
     marketData.add(dataSource); // oracle source identifier
     marketData.add(yesPool); // YES token pool
     marketData.add(noPool); // NO token pool
@@ -85,9 +93,30 @@ export function createMarket(binaryArgs: StaticArray<u8>): StaticArray<u8> {
     // Generate event
     const directionStr = direction ? "reach" : "drop";
     const positionStr = creatorPosition ? "YES" : "NO";
-    const question = `Will ${asset} price ${directionStr} $${targetPrice.toString()} by period ${expirationPeriod.toString()}?`;
+    const question = `Will ${asset} price ${directionStr} $${targetPrice.toString()} by timestamp ${expirationTimestamp.toString()}?`;
 
     generateEvent(`Market created: ${marketId}, question: "${question}", creator: ${Context.caller().toString()}, position: ${positionStr}, stake: ${creatorStake.toString()}, source: ${dataSource}`);
+
+    // Schedule automatic resolution
+    const expirationPeriod = timestampToPeriod(expirationTimestamp);
+    const currentThread = Context.currentThread();
+
+    // Schedule resolution for 1 period after expiration to ensure market has expired
+    const resolutionPeriod = expirationPeriod + 1;
+    const startSlot = new Slot(resolutionPeriod, currentThread);
+    const endSlot = new Slot(resolutionPeriod + 10, currentThread); // 10 period window for resolution
+
+    // Schedule async resolution
+    const asyncArgs = new Args().add(marketId).serialize();
+    asyncCall(
+        Context.callee(),
+        'autoResolveMarket',
+        startSlot,
+        endSlot,
+        ASYNC_CALL_GAS,
+        ASYNC_CALL_FEE,
+        asyncArgs
+    );
 
     return new Args().add(marketId).serialize();
 }
@@ -518,7 +547,7 @@ export function claimWinnings(binaryArgs: StaticArray<u8>): StaticArray<u8> {
     assert(winnings > 0, "No winnings to claim");
 
     // Check if already claimed (mark position as claimed)
-    const claimedKey = `${marketId}_${Context.caller().toString()}_claimed`; 
+    const claimedKey = `${marketId}_${Context.caller().toString()}_claimed`;
     assert(!Storage.has(stringToBytes(claimedKey)), "Winnings already claimed");
 
     // Mark as claimed
@@ -531,3 +560,76 @@ export function claimWinnings(binaryArgs: StaticArray<u8>): StaticArray<u8> {
 
     return new Args().add(winnings).serialize();
 }
+
+export function autoResolveMarket(binaryArgs: StaticArray<u8>): void {
+    const args = new Args(binaryArgs);
+    const marketId = args.nextString().expect("Market ID is required");
+
+    // Get market data
+    const marketData = Storage.get(stringToBytes(marketId));
+    if (marketData.length === 0) {
+        generateEvent(`Auto-resolution failed: Market ${marketId} not found`);
+        return;
+    }
+
+    const marketArgs = new Args(marketData);
+    marketArgs.nextString(); // creator
+    marketArgs.nextString(); // asset
+    marketArgs.nextBool();
+    marketArgs.nextF64();
+    marketArgs.nextF64(); // currentPrice
+    const expirationTimestamp = marketArgs.nextU64().unwrap();
+    marketArgs.nextU64(); // createdTimestamp
+    const dataSource = marketArgs.nextString().unwrap();
+    marketArgs.nextU64(); // yesPool
+    marketArgs.nextU64(); // noPool
+    const resolved = marketArgs.nextBool().unwrap();
+
+    // Check if already resolved
+    if (resolved) {
+        generateEvent(`Market ${marketId} already resolved`);
+        return;
+    }
+
+    // Check if market has actually expired
+    const currentTimestamp = Context.timestamp();
+    if (currentTimestamp < expirationTimestamp) {
+        generateEvent(`Market ${marketId} has not expired yet`);
+        return;
+    }
+
+    // Get price from oracle/data source
+    // For now, we'll use a mock price
+    const finalPrice = getMockPrice(dataSource);
+
+    // Resolve the market
+    const resolveArgs = new Args()
+        .add(marketId)
+        .add(finalPrice)
+        .serialize();
+
+    resolveMarket(resolveArgs);
+
+    generateEvent(`Market ${marketId} auto-resolved with price ${finalPrice.toString()}`);
+}
+
+// TODO: will be use Oracle
+function getMockPrice(dataSource: string): f64 {
+    // For testing, return a mock price based on data source
+    if (dataSource === "UMBRELLA_MAS_PRICE") return 0.1;
+    if (dataSource === "UMBRELLA_BTC_PRICE") return 100000.0;
+    if (dataSource === "UMBRELLA_ETH_PRICE") return 3000.0;
+    if (dataSource === "DUSA_MAS_USDC") return 0.15;
+    return 1.0; // default
+}
+
+// Helper function to convert timestamp to period
+function timestampToPeriod(timestamp: u64): u64 {
+    return (timestamp - GENESIS_TIMESTAMP) / T0;
+}
+
+// Helper function to convert period to timestamp
+// function periodToTimestamp(period: u64): u64 {
+//     return GENESIS_TIMESTAMP + (period * T0);
+// }
+
