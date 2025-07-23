@@ -18,7 +18,6 @@ export function constructor(_: StaticArray<u8>): void {
 export function createMarket(binaryArgs: StaticArray<u8>): StaticArray<u8> {
     const args = new Args(binaryArgs);
 
-    // Updated parameters - removed creatorStake
     const asset = args.nextString().expect("Asset is required");
     const direction = args.nextBool().expect("Direction is required"); // true = "reach", false = "drop"
     const targetPrice = args.nextF64().expect("Target price is required");
@@ -32,7 +31,7 @@ export function createMarket(binaryArgs: StaticArray<u8>): StaticArray<u8> {
     assert(creatorStake >= 1000000000, "Minimum stake is 1 MAS"); // 1 MAS = 10^9 smallest units
 
     // Validation
-    const currentPeriod = Context.currentPeriod();
+    const currentPeriod = Context.timestamp();
     assert(expirationPeriod > currentPeriod, "Expiration must be in the future");
 
     // Validate direction logic
@@ -119,7 +118,7 @@ export function resolveMarket(binaryArgs: StaticArray<u8>): StaticArray<u8> {
 
     // Validation
     assert(!resolved, "Market already resolved");
-    assert(Context.currentPeriod() >= expirationPeriod, "Market has not expired yet");
+    assert(Context.timestamp() >= expirationPeriod, "Market has not expired yet");
 
     // Determine resolution result
     let yesWins: bool = false;
@@ -163,7 +162,7 @@ export function getActiveMarkets(binaryArgs: StaticArray<u8>): StaticArray<u8> {
     assert(limit <= 50, "Limit cannot exceed 50");
 
     const totalMarkets = bytesToU64(Storage.get(ID_COUNTER_KEY));
-    const currentPeriod = Context.currentPeriod();
+    const currentPeriod = Context.timestamp();
 
     const activeMarkets = new Args();
     let count: u64 = 0;
@@ -225,7 +224,7 @@ export function getMarketDetails(binaryArgs: StaticArray<u8>): StaticArray<u8> {
     const resolutionResult = marketArgs.nextBool().unwrap();
 
     const totalPool = yesPool + noPool;
-    const currentPeriod = Context.currentPeriod();
+    const currentPeriod = Context.timestamp();
     const isExpired = currentPeriod >= expirationPeriod;
 
     // Calculate odds
@@ -306,7 +305,7 @@ export function placeBet(binaryArgs: StaticArray<u8>): StaticArray<u8> {
 
     // Validation
     assert(!resolved, "Market already resolved");
-    assert(Context.currentPeriod() < expirationPeriod, "Market has expired");
+    assert(Context.timestamp() < expirationPeriod, "Market has expired");
 
     // Update pools
     if (betOnYes) {
@@ -437,8 +436,7 @@ export function getClaimableAmount(binaryArgs: StaticArray<u8>): StaticArray<u8>
 
     // Check if already claimed
     const claimedKey = `${marketId}_${userAddress}_claimed`;
-    const alreadyClaimed = Storage.get(stringToBytes(claimedKey));
-    if (alreadyClaimed.length > 0) {
+    if (Storage.has(stringToBytes(claimedKey))) {
         return new Args().add(u64(0)).serialize();
     }
 
@@ -520,9 +518,8 @@ export function claimWinnings(binaryArgs: StaticArray<u8>): StaticArray<u8> {
     assert(winnings > 0, "No winnings to claim");
 
     // Check if already claimed (mark position as claimed)
-    const claimedKey = `${marketId}_${Context.caller().toString()}_claimed`;
-    const alreadyClaimed = Storage.get(stringToBytes(claimedKey));
-    assert(alreadyClaimed.length === 0, "Winnings already claimed");
+    const claimedKey = `${marketId}_${Context.caller().toString()}_claimed`; 
+    assert(!Storage.has(stringToBytes(claimedKey)), "Winnings already claimed");
 
     // Mark as claimed
     Storage.set(stringToBytes(claimedKey), stringToBytes("true"));
