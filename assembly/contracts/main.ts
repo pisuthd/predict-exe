@@ -12,7 +12,8 @@ import {
 const ID_COUNTER_KEY = stringToBytes('M');
 const ASYNC_CALL_GAS: u64 = 2100_000;
 const ASYNC_CALL_FEE: u64 = 1;
-const GENESIS_TIMESTAMP: u64 = 1705312800000; // Massa genesis timestamp
+// const GENESIS_TIMESTAMP: u64 = 1705312800000; // Massa genesis timestamp
+const GENESIS_TIMESTAMP: u64 = 1704289800000; // Buildnet genesis timestamp
 const T0: u64 = 16000; // 16 seconds per period in milliseconds
 
 export function constructor(_: StaticArray<u8>): void {
@@ -101,10 +102,10 @@ export function createMarket(binaryArgs: StaticArray<u8>): StaticArray<u8> {
     const expirationPeriod = timestampToPeriod(expirationTimestamp);
     const currentThread = Context.currentThread();
 
-    // Schedule resolution for 1 period after expiration to ensure market has expired
-    const resolutionPeriod = expirationPeriod + 1;
+    // Schedule resolution for 10 period after expiration to ensure market has expired
+    const resolutionPeriod = expirationPeriod + 10;
     const startSlot = new Slot(resolutionPeriod, currentThread);
-    const endSlot = new Slot(resolutionPeriod + 10, currentThread); // 10 period window for resolution
+    const endSlot = new Slot(resolutionPeriod + 100, currentThread); // 100 period window for resolution
 
     // Schedule async resolution
     const asyncArgs = new Args().add(marketId).serialize();
