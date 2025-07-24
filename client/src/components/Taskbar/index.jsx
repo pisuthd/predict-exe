@@ -1,10 +1,11 @@
 import { useState, useEffect, useContext } from "react"
 import { Modal, TaskBar, List, TitleBar } from "@react95/core"
-import { Forbidden, WindowsExplorer, Write1, Password1000, Computer3, InfoBubble, Bulb, Mailnews21, Progman1, Ulclient1002, Globe } from "@react95/icons";
+import { Forbidden, Computer, Explore, Appwiz1502, Unmute, Password1000, Computer3, InfoBubble, Bulb, Mailnews21, Progman1, Ulclient1002, Globe } from "@react95/icons";
 import About from "../About"
 import ProjectWizard from "../ProjectWizard"
 import ProjectDetails from "../ProjectDetails"
 import WalletInfo from "../WalletInfo";
+import MarketList from "../MarketList";
 import { getWallets } from "@massalabs/wallet-provider";
 import { AccountContext } from "../../contexts/account";
 import { MarketContext } from "../../contexts/market";
@@ -13,22 +14,17 @@ const TaskbarContainer = ({
     modals,
     closeModal,
     toggleModal,
-    selectedProject,
-    onProjectSubmit,  
-    openMarkets = [], // Array of currently open market detail modals
     activeModalId = null // ID of the currently active modal
 }) => {
 
     const [accounts, setAccounts] = useState([])
 
     const { account, connect, disconnect, setProvider } = useContext(AccountContext)
-    const { markets } = useContext(MarketContext)
+    const { markets, addMarket } = useContext(MarketContext) // Add addMarket from context
 
     useEffect(() => {
         checkWallet()
     }, [])
-
-    console.log("markets:", markets)
 
     const checkWallet = async () => {
         // Get list of available wallets
@@ -43,8 +39,44 @@ const TaskbarContainer = ({
                 break
             }
         }
-
     }
+
+    // Handle new market creation through MarketContext
+    const handleProjectSubmit = (marketData) => {
+        const newMarket = {
+            id: `market_${Date.now()}`,
+            creator: account?.address || "unknown",
+            asset: marketData.asset || "MAS",
+            direction: true,
+            targetPrice: marketData.targetPrice || 0.1,
+            currentPrice: marketData.currentPrice || 0.03,
+            expirationTimestamp: new Date(marketData.deadline).getTime(),
+            createdTimestamp: Date.now(),
+            dataSource: marketData.dataSource || "UMBRELLA_MAS_PRICE",
+            yesPool: 1000000000, // Default pool
+            noPool: 0,
+            totalPool: 1000000000,
+            yesOdds: 1,
+            noOdds: 0,
+            resolved: false,
+            resolutionResult: false,
+            isExpired: false,
+            expirationDate: new Date(marketData.deadline).toISOString(),
+            createdDate: new Date().toISOString(),
+            question: marketData.question,
+            yesPoolMAS: 1,
+            noPoolMAS: 0,
+            totalPoolMAS: 1,
+            // Add position for desktop display
+            position: {
+                x: Math.random() * 400 + 50,
+                y: Math.random() * 250 + 50
+            }
+        };
+
+        addMarket(newMarket); // Use context method
+        closeModal('newProject');
+    };
 
     // Helper function to generate dynamic positions
     const getDynamicPosition = (index, type = 'default') => {
@@ -52,11 +84,11 @@ const TaskbarContainer = ({
             about: { x: 80, y: 40 },
             newProject: { x: 150, y: 100 },
             projectDetails: { x: 200, y: 150 },
-            walletInfo: { x: 250, y: 0 } // Add this line
+            walletInfo: { x: 250, y: 0 }
         };
 
-        const base = basePositions[type] || basePositions.default || { x: 100, y: 50 }; // Add default fallback
-        const offset = index * 30; // Stagger by 30px each
+        const base = basePositions[type] || basePositions.default || { x: 100, y: 50 };
+        const offset = index * 20; // Stagger by 30px each
 
         return {
             x: base.x + offset,
@@ -73,7 +105,7 @@ const TaskbarContainer = ({
                 icon: <InfoBubble variant="32x32_4" />,
                 titleBarOptions: [<TitleBar.Close key="close" onClick={() => closeModal("about")} />],
                 title: "Welcome to Predict.exe",
-                buttons: [{ value: "Close", onClick: () => closeModal("about") }],
+                buttons: [{ value: "See Markets", onClick: () => toggleModal("marketList") }, { value: "Close", onClick: () => closeModal("about") }],
                 dragOptions: {
                     defaultPosition: getDynamicPosition(0, 'about')
                 }
@@ -82,7 +114,7 @@ const TaskbarContainer = ({
         newProject: {
             component: (
                 <ProjectWizard
-                    onSubmit={onProjectSubmit}
+                    onSubmit={handleProjectSubmit}
                     onCancel={() => closeModal("newProject")}
                 />
             ),
@@ -99,7 +131,7 @@ const TaskbarContainer = ({
         walletInfo: {
             component: (
                 <WalletInfo
-                    onCopyAddress={(address) => navigator.clipboard.writeText(address)} // Add this for copy
+                    onCopyAddress={(address) => navigator.clipboard.writeText(address)}
                     onClose={() => closeModal("walletInfo")}
                 />
             ),
@@ -112,48 +144,64 @@ const TaskbarContainer = ({
                     defaultPosition: getDynamicPosition(2, 'walletInfo')
                 }
             }
+        },
+        marketList: {
+            component: (
+                <MarketList
+                    onMarketClick={() => { }}
+                />
+            ),
+            props: {
+                icon: <Explore variant="32x32_4" />,
+                title: "View All Markets",
+                titleBarOptions: [<TitleBar.Close key="close" onClick={() => closeModal("marketList")} />],
+                width: "800px",
+                buttons: [{ value: "Close", onClick: () => closeModal("marketList") }],
+                dragOptions: {
+                    defaultPosition: getDynamicPosition(2, 'marketList')
+                }
+            }
         }
     };
 
     // Generate dynamic modal configs for each open market
-    const getMarketModalConfigs = () => {
-        const marketModals = {};
+    // const getMarketModalConfigs = () => {
+    //     const marketModals = {};
 
-        openMarkets.forEach((market, index) => {
-            const modalKey = `projectDetails_${market.id}`;
-            marketModals[modalKey] = {
-                component: (
-                    <ProjectDetails
-                        project={market}
-                        onClose={() => closeModal(modalKey)}
-                    />
-                ),
-                condition: true,
-                props: {
-                    icon: <InfoBubble variant="32x32_4" />,
-                    title: market.question || "Market Details",
-                    titleBarOptions: [
-                        <TitleBar.Close
-                            key="close"
-                            onClick={() => closeModal(modalKey)}
-                        />
-                    ],
-                    width: "450px",
-                    height: "600px",
-                    dragOptions: {
-                        defaultPosition: getDynamicPosition(index, 'projectDetails')
-                    }
-                }
-            };
-        });
+    //     openMarkets.forEach((market, index) => {
+    //         const modalKey = `projectDetails_${market.id}`;
+    //         marketModals[modalKey] = {
+    //             component: (
+    //                 <ProjectDetails
+    //                     project={market}
+    //                     onClose={() => closeModal(modalKey)}
+    //                 />
+    //             ),
+    //             condition: true,
+    //             props: {
+    //                 icon: <InfoBubble variant="32x32_4" />,
+    //                 title: market.question || "Market Details",
+    //                 titleBarOptions: [
+    //                     <TitleBar.Close
+    //                         key="close"
+    //                         onClick={() => closeModal(modalKey)}
+    //                     />
+    //                 ],
+    //                 width: "450px", 
+    //                 dragOptions: {
+    //                     defaultPosition: getDynamicPosition(index, 'projectDetails')
+    //                 }
+    //             }
+    //         };
+    //     });
 
-        return marketModals;
-    };
+    //     return marketModals;
+    // };
 
     // Combine all modal configs
     const allModalConfigs = {
         ...modalConfigs,
-        ...getMarketModalConfigs()
+        // ...getMarketModalConfigs()
     };
 
     // Render active modals
@@ -161,21 +209,12 @@ const TaskbarContainer = ({
         // Sort modals so active one renders last (on top)
         const modalEntries = Object.entries(allModalConfigs);
         const sortedModals = modalEntries.sort(([modalName]) => {
-            return modalName === activeModalId ? 1 : -1;
+            return modalName === activeModalId ? -1 : 1;
         });
 
         return sortedModals.map(([modalName, config]) => {
             // Check if modal should be shown
-            let isActive;
-
-            if (modalName.startsWith('projectDetails_')) {
-                // For market detail modals, check if the market is in openMarkets
-                const marketId = modalName.replace('projectDetails_', '');
-                isActive = openMarkets.some(market => market.id === marketId);
-            } else {
-                // For other modals, check the modals state
-                isActive = modals[modalName];
-            }
+            const isActive = modals[modalName]
 
             const hasCondition = config.condition !== undefined ? config.condition : true;
 
@@ -192,13 +231,12 @@ const TaskbarContainer = ({
         });
     };
 
-
     return (
         <div>
             {renderModals()}
 
-            <TaskBar list={<List>
-                {!account && (
+            <TaskBar list={<List style={{ minWidth: "160px" }}>
+                {/* {!account && (
                     <>
                         <List.Item icon={<Mailnews21 variant="32x32_4" />}>
                             <List>
@@ -236,33 +274,35 @@ const TaskbarContainer = ({
                             About
                         </List.Item>
                     </>
-                )
-
-                }
+                )}
 
                 {account && (
                     <>
-
                         <List.Item style={{ width: "180px" }} icon={<WindowsExplorer variant="32x32_4" />}>
-                            <List>
-                                <List.Item
-                                    icon={<InfoBubble variant="32x32_4" />}
-                                    onClick={() => toggleModal("newProject")}
-                                >
-                                    Blackjack
-                                </List.Item>
-                                <List.Item
-                                    icon={<InfoBubble variant="32x32_4" />}
-                                    onClick={() => toggleModal("newProject")}
-                                >
-                                    Minesweeper
-                                </List.Item>
+                            <List> 
+                                {markets.slice(0, 5).map((market) => (
+                                    <List.Item
+                                        key={market.id}
+                                        icon={<InfoBubble variant="32x32_4" />}
+                                        onClick={() => {
+                                            // This would open the market details - you might want to handle this
+                                            console.log('Open market:', market.question);
+                                        }}
+                                    >
+                                        {market.question.slice(0, 30)}...
+                                    </List.Item>
+                                ))}
+                                {markets.length === 0 && (
+                                    <List.Item icon={<InfoBubble variant="32x32_4" />}>
+                                        No markets available
+                                    </List.Item>
+                                )}
                             </List>
                             Available Markets<span style={{ marginRight: "20px" }} />
                         </List.Item>
 
                         <List.Item
-                            icon={<Write1 variant="32x32_4" />}
+                            icon={<Appwiz1502 variant="32x32_4" />}
                             onClick={() => toggleModal("newProject")}
                         >
                             Create New Market
@@ -288,7 +328,96 @@ const TaskbarContainer = ({
                             Shut Down...
                         </List.Item>
                     </>
+                )} */}
+
+
+                <List.Item onClick={() => toggleModal("marketList")} icon={<Explore variant="32x32_4" />}>
+                    View All Markets
+                </List.Item>
+                <List.Item style={{ width: "180px" }} icon={<Unmute variant="32x32_4" />}>
+                    <List style={{ width: "360px" }}>
+                        {markets.slice(0, 3).map((market) => (
+                            <List.Item
+                                key={market.id}
+                                icon={<InfoBubble variant="32x32_4" />}
+                                onClick={() => {
+                                    // This would open the market details - you might want to handle this
+                                    console.log('Open market:', market.question);
+                                }}
+                            >
+                                {market.question.slice(0, 50)}...
+                            </List.Item>
+                        ))}
+                        {markets.length === 0 && (
+                            <List.Item icon={<InfoBubble variant="32x32_4" />}>
+                                No markets available
+                            </List.Item>
+                        )}
+                    </List>
+                    Trending
+                </List.Item>
+                <List.Item
+                    icon={<Appwiz1502 variant="32x32_4" />}
+                    onClick={() => toggleModal("newProject")}
+                >
+                    Setup New Market
+                </List.Item>
+
+                {account && (
+                    <List.Item
+                        icon={<Password1000 variant="32x32_4" />}
+                        onClick={() => account ? toggleModal("walletInfo") : alert("Please connect to one of your account first")}
+                    >
+                        My Wallet
+                    </List.Item>
                 )}
+
+                <List.Item
+                    icon={<InfoBubble variant="32x32_4" />}
+                    onClick={() => toggleModal("about")}
+                >
+                    About
+                </List.Item>
+
+                <List.Divider />
+                {account ?
+                    <List.Item
+                        icon={<Computer3 variant="32x32_4" />}
+                        onClick={(() => disconnect())}
+                    >
+                        Disconnect...
+                    </List.Item>
+                    :
+                    <List.Item icon={<Mailnews21 variant="32x32_4" />}>
+                        <List>
+                            {accounts.length === 0 && (
+                                <List.Item
+                                    icon={<Forbidden variant="32x32_4" />}
+                                    style={{ width: "200px" }}
+                                >
+                                    No MassaStation Found
+                                </List.Item>
+                            )}
+                            {accounts.map((account, index) => {
+                                const shortAddress = `${account.address.slice(0, 6)}...${account.address.slice(-4)}`;
+                                return (
+                                    <List.Item
+                                        key={index}
+                                        icon={<Ulclient1002 variant="32x32_4" />}
+                                        onClick={() => {
+                                            connect(account)
+                                            toggleModal("walletInfo")
+                                        }}
+                                    >
+                                        {account.accountName} ({shortAddress})
+                                    </List.Item>
+                                );
+                            })}
+                        </List>
+                        Connect To
+                    </List.Item>
+                }
+
             </List>} />
         </div >
     )

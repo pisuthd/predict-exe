@@ -204,13 +204,7 @@ const WalletInfo = ({
                         <InfoRow>
                             <Label>Account Name:</Label>
                             <Value>{account.accountName}</Value>
-                        </InfoRow>
-
-                        {/* <InfoRow>
-                            <Label>Wallet Type:</Label>
-                            <Value>{walletData.walletType}</Value>
-                        </InfoRow> */}
-
+                        </InfoRow> 
                         <InfoRow>
                             <Label>Address:</Label>
                             <Value title={account.address}>

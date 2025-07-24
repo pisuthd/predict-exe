@@ -26,33 +26,20 @@ const DesktopArea = styled.div`
 
 function App() {
 
-  const [markets, setMarkets] = useState(mockMarkets);
   const [modals, setModals] = useState({
     about: true,
     newProject: false,
-    walletInfo: false
+    walletInfo: false,
+    marketList: false
   });
-  const [openMarkets, setOpenMarkets] = useState([]); // Array of markets with open detail modals
+
   const [activeModalId, setActiveModalId] = useState(null); // Track which modal is currently active
 
   const closeModal = (name) => {
-    if (name.startsWith('projectDetails_')) {
-      // Handle closing specific market detail modal
-      const marketId = name.replace('projectDetails_', '');
-      setOpenMarkets(prev => prev.filter(market => market.id !== marketId));
-
-      // If we're closing the active modal, clear active state
-      if (activeModalId === name) {
-        setActiveModalId(null);
-      }
-    } else {
-      // Handle closing other modals
-      setModals(prev => ({ ...prev, [name]: false }));
-
-      // If we're closing the active modal, clear active state
-      if (activeModalId === name) {
-        setActiveModalId(null);
-      }
+    setModals(prev => ({ ...prev, [name]: false }));
+    // If we're closing the active modal, clear active state
+    if (activeModalId === name) {
+      setActiveModalId(null);
     }
   };
 
@@ -69,40 +56,40 @@ function App() {
     });
   };
 
-  const handleProjectClick = (market) => {
-    const modalId = `projectDetails_${market.id}`;
+  // const handleProjectClick = (market) => {
+  //   const modalId = `projectDetails_${market.id}`;
 
-    // Check if this market is already open
-    const isAlreadyOpen = openMarkets.some(openMarket => openMarket.id === market.id);
+  //   // Check if this market is already open
+  //   const isAlreadyOpen = openMarkets.some(openMarket => openMarket.id === market.id);
 
-    if (!isAlreadyOpen) {
-      // Add market to openMarkets array
-      setOpenMarkets(prev => [...prev, market]);
-    }
+  //   if (!isAlreadyOpen) {
+  //     // Add market to openMarkets array
+  //     setOpenMarkets(prev => [...prev, market]);
+  //   }
 
-    // Always set this modal as active (bring to front)
-    setActiveModalId(modalId);
-  };
+  //   // Always set this modal as active (bring to front)
+  //   setActiveModalId(modalId);
+  // };
 
-  const handleProjectSubmit = (marketData) => {
-    const newMarket = {
-      id: `market-${Date.now()}`,
-      ...marketData,
-      createdAt: new Date().toISOString(),
-      totalPool: 0,
-      yesShares: 0,
-      noShares: 0,
-      yesPrice: 0.5,
-      noPrice: 0.5,
-      status: 'active',
-      position: {
-        x: Math.random() * 400 + 50,
-        y: Math.random() * 250 + 50
-      }
-    };
-    setMarkets(prev => [...prev, newMarket]);
-    closeModal('newProject');
-  };
+  // const handleProjectSubmit = (marketData) => {
+  //   const newMarket = {
+  //     id: `market-${Date.now()}`,
+  //     ...marketData,
+  //     createdAt: new Date().toISOString(),
+  //     totalPool: 0,
+  //     yesShares: 0,
+  //     noShares: 0,
+  //     yesPrice: 0.5,
+  //     noPrice: 0.5,
+  //     status: 'active',
+  //     position: {
+  //       x: Math.random() * 400 + 50,
+  //       y: Math.random() * 250 + 50
+  //     }
+  //   };
+  //   setMarkets(prev => [...prev, newMarket]);
+  //   closeModal('newProject');
+  // };
 
 
   return (
@@ -111,16 +98,16 @@ function App() {
         <AppContainer>
           <DesktopArea>
             <Desktop
-              projects={markets}
-              onProjectClick={handleProjectClick}
+              // onMarketClick={handleProjectClick}
+              toggleModal={toggleModal}
             />
           </DesktopArea>
           <Taskbar
             modals={modals}
             closeModal={closeModal}
             toggleModal={toggleModal}
-            onProjectSubmit={handleProjectSubmit}
-            openMarkets={openMarkets}
+            // onProjectSubmit={handleProjectSubmit}
+            // openMarkets={openMarkets}
             activeModalId={activeModalId}
           />
         </AppContainer>
