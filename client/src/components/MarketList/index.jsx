@@ -83,7 +83,7 @@ const QuestionCell = styled.div`
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  padding-right: 8px;
+  padding-right: 8px; 
 `;
 
 const PriceCell = styled.div`
@@ -140,16 +140,21 @@ const FilterButton = styled(Button)`
 `;
 
 const MarketListing = ({ onMarketClick }) => {
-    
+
     const { markets } = useContext(MarketContext);
     const [filter, setFilter] = React.useState('all'); // all, active, expired, resolved
 
-    // Helper functions
-    const getDaysLeft = (expirationTimestamp) => {
+    // Helper functions 
+
+    const getTimeLeft = (expirationTimestamp) => {
         const now = Date.now();
         const timeLeft = expirationTimestamp - now;
-        const daysLeft = Math.ceil(timeLeft / (1000 * 60 * 60 * 24));
-        return Math.max(0, daysLeft);
+
+        const totalHours = Math.max(0, Math.ceil(timeLeft / (1000 * 60 * 60)));
+        const days = Math.floor(totalHours / 24);
+        const hours = totalHours % 24;
+
+        return { days, hours };
     };
 
     const getMarketStatus = (market) => {
@@ -257,7 +262,7 @@ const MarketListing = ({ onMarketClick }) => {
                                     market.totalPool
                                 );
                                 const status = getMarketStatus(market);
-                                const daysLeft = getDaysLeft(market.expirationTimestamp);
+                                const { days, hours } = getTimeLeft(market.expirationTimestamp)
 
                                 return (
                                     <MarketRow
@@ -279,7 +284,7 @@ const MarketListing = ({ onMarketClick }) => {
                                         <StatusCell>
                                             {status === 'active' ? (
                                                 <StatusBadge status={status}>
-                                                    {daysLeft}d
+                                                    In {days > 0 ? `${days}d` : `${hours}h`}
                                                 </StatusBadge>
                                             ) : (
                                                 <StatusBadge status={status}>
@@ -297,7 +302,7 @@ const MarketListing = ({ onMarketClick }) => {
                     </MarketTable>
                 </Fieldset>
             </Frame>
- 
+
         </Container>
     );
 };

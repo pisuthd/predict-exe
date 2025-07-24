@@ -26,11 +26,14 @@ const DesktopArea = styled.div`
 
 function App() {
 
+  const [selected, setSelected] = useState(undefined)
+
   const [modals, setModals] = useState({
     about: true,
     newProject: false,
     walletInfo: false,
-    marketList: false
+    marketList: false,
+    marketInfo: false
   });
 
   const [activeModalId, setActiveModalId] = useState(null); // Track which modal is currently active
@@ -71,25 +74,23 @@ function App() {
   //   setActiveModalId(modalId);
   // };
 
-  // const handleProjectSubmit = (marketData) => {
-  //   const newMarket = {
-  //     id: `market-${Date.now()}`,
-  //     ...marketData,
-  //     createdAt: new Date().toISOString(),
-  //     totalPool: 0,
-  //     yesShares: 0,
-  //     noShares: 0,
-  //     yesPrice: 0.5,
-  //     noPrice: 0.5,
-  //     status: 'active',
-  //     position: {
-  //       x: Math.random() * 400 + 50,
-  //       y: Math.random() * 250 + 50
-  //     }
-  //   };
-  //   setMarkets(prev => [...prev, newMarket]);
-  //   closeModal('newProject');
-  // };
+  const handleMarketClick = (market) => {
+
+    setModals(prev => {
+      const newState = { ...prev, ["marketInfo"]: true };
+
+      // If opening a modal, make it active
+      if (newState["marketInfo"]) {
+        setActiveModalId("marketInfo");
+      }
+
+      setSelected(market)
+
+      return newState;
+    });
+
+  }
+ 
 
 
   return (
@@ -98,7 +99,7 @@ function App() {
         <AppContainer>
           <DesktopArea>
             <Desktop
-              // onMarketClick={handleProjectClick}
+              onMarketClick={handleMarketClick}
               toggleModal={toggleModal}
             />
           </DesktopArea>
@@ -106,9 +107,9 @@ function App() {
             modals={modals}
             closeModal={closeModal}
             toggleModal={toggleModal}
-            // onProjectSubmit={handleProjectSubmit}
-            // openMarkets={openMarkets}
+            selected={selected} 
             activeModalId={activeModalId}
+            onMarketClick={handleMarketClick}
           />
         </AppContainer>
       </AccountProvider>

@@ -14,13 +14,15 @@ const TaskbarContainer = ({
     modals,
     closeModal,
     toggleModal,
+    selected,
+    onMarketClick,
     activeModalId = null // ID of the currently active modal
 }) => {
 
     const [accounts, setAccounts] = useState([])
 
     const { account, connect, disconnect, setProvider } = useContext(AccountContext)
-    const { markets, addMarket } = useContext(MarketContext) // Add addMarket from context
+    const { markets } = useContext(MarketContext) // Add addMarket from context
 
     useEffect(() => {
         checkWallet()
@@ -41,49 +43,12 @@ const TaskbarContainer = ({
         }
     }
 
-    // Handle new market creation through MarketContext
-    const handleProjectSubmit = (marketData) => {
-        const newMarket = {
-            id: `market_${Date.now()}`,
-            creator: account?.address || "unknown",
-            asset: marketData.asset || "MAS",
-            direction: true,
-            targetPrice: marketData.targetPrice || 0.1,
-            currentPrice: marketData.currentPrice || 0.03,
-            expirationTimestamp: new Date(marketData.deadline).getTime(),
-            createdTimestamp: Date.now(),
-            dataSource: marketData.dataSource || "UMBRELLA_MAS_PRICE",
-            yesPool: 1000000000, // Default pool
-            noPool: 0,
-            totalPool: 1000000000,
-            yesOdds: 1,
-            noOdds: 0,
-            resolved: false,
-            resolutionResult: false,
-            isExpired: false,
-            expirationDate: new Date(marketData.deadline).toISOString(),
-            createdDate: new Date().toISOString(),
-            question: marketData.question,
-            yesPoolMAS: 1,
-            noPoolMAS: 0,
-            totalPoolMAS: 1,
-            // Add position for desktop display
-            position: {
-                x: Math.random() * 400 + 50,
-                y: Math.random() * 250 + 50
-            }
-        };
-
-        addMarket(newMarket); // Use context method
-        closeModal('newProject');
-    };
-
     // Helper function to generate dynamic positions
     const getDynamicPosition = (index, type = 'default') => {
         const basePositions = {
             about: { x: 80, y: 40 },
             newProject: { x: 150, y: 100 },
-            projectDetails: { x: 200, y: 150 },
+            projectDetails: { x: 200, y: 40 },
             walletInfo: { x: 250, y: 0 }
         };
 
@@ -114,7 +79,7 @@ const TaskbarContainer = ({
         newProject: {
             component: (
                 <ProjectWizard
-                    onSubmit={handleProjectSubmit}
+                    onSubmit={() => { }}
                     onCancel={() => closeModal("newProject")}
                 />
             ),
@@ -148,7 +113,7 @@ const TaskbarContainer = ({
         marketList: {
             component: (
                 <MarketList
-                    onMarketClick={() => { }}
+                    onMarketClick={onMarketClick}
                 />
             ),
             props: {
@@ -201,7 +166,20 @@ const TaskbarContainer = ({
     // Combine all modal configs
     const allModalConfigs = {
         ...modalConfigs,
-        // ...getMarketModalConfigs()
+        // ...getMarketModalConfigs(),
+        // only one market at a time for now
+        marketInfo: {
+            component: <ProjectDetails project={selected} onClose={() => closeModal("marketInfo")} />,
+            props: {
+                width: "450px",
+                icon: <InfoBubble variant="32x32_4" />,
+                titleBarOptions: [<TitleBar.Close key="close" onClick={() => closeModal("marketInfo")} />],
+                title: selected && selected.question || "Market Details",
+                dragOptions: {
+                    defaultPosition: getDynamicPosition(0, 'projectDetails')
+                }
+            }
+        }
     };
 
     // Render active modals
@@ -236,100 +214,6 @@ const TaskbarContainer = ({
             {renderModals()}
 
             <TaskBar list={<List style={{ minWidth: "160px" }}>
-                {/* {!account && (
-                    <>
-                        <List.Item icon={<Mailnews21 variant="32x32_4" />}>
-                            <List>
-                                {accounts.length === 0 && (
-                                    <List.Item
-                                        icon={<Forbidden variant="32x32_4" />}
-                                        style={{ width: "200px" }}
-                                    >
-                                        No MassaStation Wallet
-                                    </List.Item>
-                                )}
-                                {accounts.map((account, index) => {
-                                    const shortAddress = `${account.address.slice(0, 6)}...${account.address.slice(-4)}`;
-                                    return (
-                                        <List.Item
-                                            key={index}
-                                            icon={<Ulclient1002 variant="32x32_4" />}
-                                            onClick={() => {
-                                                connect(account)
-                                                toggleModal("walletInfo")
-                                            }}
-                                        >
-                                            {account.accountName} ({shortAddress})
-                                        </List.Item>
-                                    );
-                                })}
-                            </List>
-                            Choose Account<span style={{ marginRight: "20px" }} />
-                        </List.Item>
-                        <List.Divider />
-                        <List.Item
-                            icon={<InfoBubble variant="32x32_4" />}
-                            onClick={() => toggleModal("about")}
-                        >
-                            About
-                        </List.Item>
-                    </>
-                )}
-
-                {account && (
-                    <>
-                        <List.Item style={{ width: "180px" }} icon={<WindowsExplorer variant="32x32_4" />}>
-                            <List> 
-                                {markets.slice(0, 5).map((market) => (
-                                    <List.Item
-                                        key={market.id}
-                                        icon={<InfoBubble variant="32x32_4" />}
-                                        onClick={() => {
-                                            // This would open the market details - you might want to handle this
-                                            console.log('Open market:', market.question);
-                                        }}
-                                    >
-                                        {market.question.slice(0, 30)}...
-                                    </List.Item>
-                                ))}
-                                {markets.length === 0 && (
-                                    <List.Item icon={<InfoBubble variant="32x32_4" />}>
-                                        No markets available
-                                    </List.Item>
-                                )}
-                            </List>
-                            Available Markets<span style={{ marginRight: "20px" }} />
-                        </List.Item>
-
-                        <List.Item
-                            icon={<Appwiz1502 variant="32x32_4" />}
-                            onClick={() => toggleModal("newProject")}
-                        >
-                            Create New Market
-                        </List.Item>
-
-                        <List.Item
-                            icon={<Password1000 variant="32x32_4" />}
-                            onClick={() => toggleModal("walletInfo")}
-                        >
-                            My Wallet
-                        </List.Item>
-                        <List.Item
-                            icon={<InfoBubble variant="32x32_4" />}
-                            onClick={() => toggleModal("about")}
-                        >
-                            About
-                        </List.Item>
-                        <List.Divider />
-                        <List.Item
-                            icon={<Computer3 variant="32x32_4" />}
-                            onClick={(() => disconnect())}
-                        >
-                            Shut Down...
-                        </List.Item>
-                    </>
-                )} */}
-
 
                 <List.Item onClick={() => toggleModal("marketList")} icon={<Explore variant="32x32_4" />}>
                     View All Markets
@@ -341,8 +225,7 @@ const TaskbarContainer = ({
                                 key={market.id}
                                 icon={<InfoBubble variant="32x32_4" />}
                                 onClick={() => {
-                                    // This would open the market details - you might want to handle this
-                                    console.log('Open market:', market.question);
+                                    onMarketClick(market)
                                 }}
                             >
                                 {market.question.slice(0, 50)}...

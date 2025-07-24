@@ -61,7 +61,7 @@ const StatusInfo = styled.div`
 `;
 
 
-const Desktop = ({ onProjectClick: onMarketClick, toggleModal }) => {
+const Desktop = ({ onMarketClick, toggleModal }) => {
 
   const { markets } = useContext(MarketContext);
 
@@ -76,14 +76,6 @@ const Desktop = ({ onProjectClick: onMarketClick, toggleModal }) => {
 
     return { days, hours };
   };
-
-  // Helper function to format date
-  // const formatDate = (timestamp) => {
-  //   return new Date(timestamp).toLocaleDateString('en-US', {
-  //     month: 'short',
-  //     day: 'numeric'
-  //   });
-  // };
   
   // Create static icons and position markets
   const { staticIcons, marketsWithPositions } = useMemo(() => {
