@@ -1,4 +1,4 @@
-import React, { useContext, useState, useCallback } from 'react';
+import React, { useContext, useState, useCallback, useEffect } from 'react';
 import { Button, Frame, Fieldset, Input } from '@react95/core';
 import styled from 'styled-components';
 import { AccountContext } from '../../contexts/account';
@@ -164,7 +164,7 @@ const ErrorMessage = styled.div`
 
 const ProjectDetails = ({ project: market, onClose }) => {
 
-  const { account, placeBet } = useContext(AccountContext);
+  const { account, placeBet, getUserPosition } = useContext(AccountContext);
 
   const [showBuyModal, setShowBuyModal] = useState(false);
   const [buyType, setBuyType] = useState(''); // 'yes' or 'no'
@@ -172,12 +172,12 @@ const ProjectDetails = ({ project: market, onClose }) => {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
 
-  // Mock user positions - replace with real data
-  const userPosition = {
-    yesShares: 150.50, // Mock YES position
-    noShares: 75.25,   // Mock NO position
-    totalInvested: 225.75
-  };
+  const [position, setPosition] = useState(undefined)
+
+  useEffect(() => {
+    market && account && getUserPosition(market.id, account).then(setPosition)
+  }, [account, market])
+
 
   // Helper functions 
   const getTimeLeft = (expirationTimestamp) => {
@@ -200,7 +200,7 @@ const ProjectDetails = ({ project: market, onClose }) => {
       minute: '2-digit'
     });
   };
- 
+
   const getMarketStatus = () => {
     if (market.resolved) return 'resolved';
     if (market.isExpired) return 'expired';
@@ -249,20 +249,20 @@ const ProjectDetails = ({ project: market, onClose }) => {
 
     try {
       await placeBet(market.id, buyType === 'yes', `${amount}`);
-      
+
       // Success - close modal and reset
       setShowBuyModal(false);
       setBuyAmount('');
       setError('');
-      
+
       // Refresh positions
 
     } catch (err) {
       console.error('Error placing bet:', err);
-      
+
       // Handle different types of errors
       let errorMessage = 'Failed to place bet. Please try again.';
-      
+
       if (err.message) {
         if (err.message.includes('insufficient')) {
           errorMessage = 'Insufficient balance. Please check your MAS balance.';
@@ -278,7 +278,7 @@ const ProjectDetails = ({ project: market, onClose }) => {
           errorMessage = err.message;
         }
       }
-      
+
       setError(errorMessage);
     } finally {
       setIsLoading(false);
@@ -334,8 +334,8 @@ const ProjectDetails = ({ project: market, onClose }) => {
                 <Value>{market.totalPoolMAS} MAS</Value>
               </InfoRow>
               <InfoRow>
-                <Label>Your Total Staked:</Label>
-                <Value>{userPosition.totalInvested} MAS</Value>
+                <Label>Your Staked:</Label>
+                <Value>{position ? (position.totalYes + position.totalNo) : 0} MAS</Value>
               </InfoRow>
 
               <PriceContainer>
@@ -343,19 +343,30 @@ const ProjectDetails = ({ project: market, onClose }) => {
                   <div style={{ fontSize: '10px', fontWeight: 'bold' }}>YES</div>
                   <div style={{ fontSize: '12px' }}>{market.yesPoolMAS.toFixed(3)} MAS</div>
                   <div style={{ fontSize: '9px' }}>{yesPercentage}% probability</div>
-                  <div style={{ fontSize: '9px', borderTop: '1px solid #666', paddingTop: '4px', marginTop: '4px' }}>
-                    <strong>Your Position:</strong>
-                  </div>
-                  <div style={{ fontSize: '9px' }}>{userPosition.yesShares.toFixed(2)} shares</div>
+                  {position && (
+                    <>
+                      <div style={{ fontSize: '9px', borderTop: '1px solid #666', paddingTop: '4px', marginTop: '4px' }}>
+                        <strong>Your Position:</strong>
+                      </div>
+                      <div style={{ fontSize: '9px' }}>{position.totalYes.toFixed(2)} MAS</div>
+                    </>
+                  )}
+
                 </PriceBox>
                 <PriceBox type="no">
                   <div style={{ fontSize: '10px', fontWeight: 'bold' }}>NO</div>
                   <div style={{ fontSize: '12px' }}>{market.noPoolMAS.toFixed(3)} MAS</div>
                   <div style={{ fontSize: '9px' }}>{noPercentage}% probability</div>
-                  <div style={{ fontSize: '9px', borderTop: '1px solid #666', paddingTop: '4px', marginTop: '4px' }}>
-                    <strong>Your Position:</strong>
-                  </div>
-                  <div style={{ fontSize: '9px' }}>{userPosition.noShares.toFixed(2)} shares</div>
+                  {position && (
+                    <>
+                      <div style={{ fontSize: '9px', borderTop: '1px solid #666', paddingTop: '4px', marginTop: '4px' }}>
+                        <strong>Your Position:</strong>
+                      </div>
+                      <div style={{ fontSize: '9px' }}>{position.totalNo.toFixed(2)} MAS</div>
+                    </>
+                  )
+
+                  }
                 </PriceBox>
               </PriceContainer>
 
@@ -402,6 +413,10 @@ const ProjectDetails = ({ project: market, onClose }) => {
                 <Value>{(buyType === 'yes' ? market.yesPoolMAS : market.noPoolMAS).toFixed(3)} MAS</Value>
               </InfoRow>
               <InfoRow>
+                <Label>Your Staked:</Label>
+                <Value>{(buyType === 'yes' ? position.totalYes : position.totalNo).toFixed(3)} MAS</Value>
+              </InfoRow>
+              <InfoRow>
                 <Label>Probability:</Label>
                 <Value>{buyType === 'yes' ? yesPercentage : noPercentage}%</Value>
               </InfoRow>
@@ -420,18 +435,18 @@ const ProjectDetails = ({ project: market, onClose }) => {
                   disabled={isLoading}
                 />
                 <span style={{ fontSize: '11px' }}>MAS</span>
-              </InputRow> 
-              
+              </InputRow>
+
               {error && (
                 <ErrorMessage>
                   {error}
                 </ErrorMessage>
               )}
-              
+
               {!account && (
-                <div style={{ 
-                  textAlign: "center", 
-                  fontSize: "11px", 
+                <div style={{
+                  textAlign: "center",
+                  fontSize: "11px",
                   marginTop: "10px",
                   color: "#666",
                   fontStyle: "italic"
@@ -442,7 +457,7 @@ const ProjectDetails = ({ project: market, onClose }) => {
             </div>
 
             <ButtonGroup>
-              <Button 
+              <Button
                 onClick={() => setShowBuyModal(false)}
                 disabled={isLoading}
               >
@@ -450,8 +465,8 @@ const ProjectDetails = ({ project: market, onClose }) => {
               </Button>
               <Button
                 onClick={handleConfirmBuy}
-                style={{ 
-                  backgroundColor: buyType === 'yes' ? '#90EE90' : '#FFB6C1', 
+                style={{
+                  backgroundColor: buyType === 'yes' ? '#90EE90' : '#FFB6C1',
                   fontWeight: 'bold',
                   opacity: isLoading ? 0.7 : 1
                 }}

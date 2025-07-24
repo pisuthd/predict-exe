@@ -2,6 +2,7 @@ import React, { useCallback, useContext, useEffect, useState } from 'react';
 import { Button, Input, Frame, Fieldset } from '@react95/core';
 import styled from 'styled-components';
 import { AccountContext } from '../../contexts/account';
+import { MarketContext } from '../../contexts/market';
 
 const Container = styled.div`
   padding: 16px;
@@ -55,6 +56,7 @@ const TokenItem = styled.div`
   padding: 4px 8px;
   border-bottom: 1px solid #e0e0e0;
   font-size: 11px;
+  cursor: pointer;
   
   &:hover {
     background: #0000ff;
@@ -107,7 +109,6 @@ const StatusIndicator = styled.div`
   span {
     text-transform: capitalize;
   }
-
 `;
 
 const StatusDot = styled.div`
@@ -118,83 +119,139 @@ const StatusDot = styled.div`
   border: 1px solid #000;
 `;
 
-const WalletInfo = ({
-    walletData = {
-        accountName: "My Massa Account",
-        walletType: "MassaStation",
-        address: "AU1abc...def123",
-        balance: "1,234.56",
-        connected: true,
-        tokens: [
-            {
-                marketId: "market_001",
-                marketName: "ETH reaches $4000 by March 31st?",
-                tokenType: "YES",
-                balance: "150.00"
-            },
-            {
-                marketId: "market_001",
-                marketName: "ETH reaches $4000 by March 31st?",
-                tokenType: "NO",
-                balance: "50.00"
-            },
-            {
-                marketId: "market_002",
-                marketName: "BTC surpasses $100k in Q2 2025?",
-                tokenType: "YES",
-                balance: "75.50"
-            },
-            {
-                marketId: "market_003",
-                marketName: "Massa TPS exceeds 10,000 daily avg?",
-                tokenType: "NO",
-                balance: "200.00"
-            },
-            {
-                marketId: "market_004",
-                marketName: "DeFi TVL on Massa reaches $1B?",
-                tokenType: "YES",
-                balance: "300.25"
+const LoadingText = styled.div`
+  padding: 20px;
+  text-align: center;
+  color: #666;
+  font-size: 11px;
+  font-style: italic;
+`;
+
+const WalletInfo = ({ onCopyAddress, onClose, onMarketClick }) => {
+
+    const [positions, setPositions ] = useState([])
+
+    const [balance, setBalance] = useState("");
+    const [networkName, setNetworkName] = useState("N/A");
+    const [isLoading, setIsLoading] = useState(false);
+
+    const { markets } = useContext(MarketContext);
+    const { account, provider, getUserPositions } = useContext(AccountContext);
+
+    // Convert positions to token format with market details
+    const getUserTokens = () => {
+        if (!positions || !markets) return [];
+
+        const tokens = [];
+        
+        positions.forEach(position => {
+            // Find the market details
+            const market = markets.find(m => m.id === position.marketId);
+            
+            if (market) {
+                // Add YES position if exists
+                if (position.totalYes > 0) {
+                    tokens.push({
+                        marketId: position.marketId,
+                        marketName: market.question,
+                        tokenType: "YES",
+                        balance: position.totalYes.toFixed(2),
+                        marketStatus: market.resolved ? 'resolved' : market.isExpired ? 'expired' : 'active',
+                        resolutionResult: market.resolutionResult
+                    });
+                }
+                
+                // Add NO position if exists
+                if (position.totalNo > 0) {
+                    tokens.push({
+                        marketId: position.marketId,
+                        marketName: market.question,
+                        tokenType: "NO", 
+                        balance: position.totalNo.toFixed(2),
+                        marketStatus: market.resolved ? 'resolved' : market.isExpired ? 'expired' : 'active',
+                        resolutionResult: market.resolutionResult
+                    });
+                }
             }
-        ]
-    }, 
-    onCopyAddress,
-    onClose
-}) => {
+        });
 
+        return tokens;
+    };
 
-    const [balance, setBalance] = useState("")
-    const [networkName, setNetworkName] = useState("N/A")
+    const userTokens = getUserTokens();
+    const totalTokenValue = userTokens.reduce((sum, token) => sum + parseFloat(token.balance), 0);
+    const totalPositions = positions ? positions.length : 0;
 
-    const { account, provider } = useContext(AccountContext)
+    const handleRefresh = useCallback(async () => {
+        if (!provider || !account) return;
+        
+        setIsLoading(true);
+        try {
+            await checkBalance(provider, account);
+            getUserPositions(account).then(setPositions)
+        } catch (error) {
+            console.error('Error refreshing data:', error);
+        } finally {
+            setIsLoading(false);
+        }
+    }, [provider, account]);
 
-    const totalTokenValue = walletData.tokens.reduce((sum, token) => sum + parseFloat(token.balance), 0);
-
-    const handleRefresh = useCallback(() => {
-        checkBalance(provider, account)
-    }, [provider, account])
+    useEffect(() => { 
+        account && getUserPositions(account).then(setPositions)
+    }, [account]);
 
     const handleCopyAddress = () => {
+        if (!account) return;
+        
         if (onCopyAddress) {
-            onCopyAddress(walletData.address);
+            onCopyAddress(account.address);
         } else {
-            navigator.clipboard.writeText(walletData.address);
+            navigator.clipboard.writeText(account.address);
             alert('Address copied to clipboard');
         }
     };
 
     useEffect(() => {
-        provider && account && checkBalance(provider, account)
-    }, [provider, account])
+        if (provider && account) {
+            checkBalance(provider, account);
+        }
+    }, [provider, account]);
 
     const checkBalance = async (provider, account) => {
-        const balance = await account.balance()
-        setBalance(formatMASBalance(balance))
-        // Get network info
-        const networkInfo = await provider.networkInfos();
-        setNetworkName(networkInfo.name)
-    }
+        try {
+            const balance = await account.balance();
+            setBalance(formatMASBalance(balance));
+            // Get network info
+            const networkInfo = await provider.networkInfos();
+            setNetworkName(networkInfo.name);
+        } catch (error) {
+            console.error('Error checking balance:', error);
+            setBalance('Error loading balance');
+        }
+    };
 
+    // Helper function to get token display style
+    const getTokenStyle = (token) => {
+        if (token.marketStatus === 'resolved') {
+            const isWinner = (token.tokenType === 'YES' && token.resolutionResult) || 
+                           (token.tokenType === 'NO' && !token.resolutionResult);
+            return {
+                backgroundColor: isWinner ? '#e6ffe6' : '#ffe6e6',
+                border: `1px solid ${isWinner ? '#90EE90' : '#FFB6C1'}`
+            };
+        }
+        return {};
+    };
+
+    if (!account) {
+        return (
+            <Container>
+                <LoadingText>
+                    Please connect your wallet to view account details
+                </LoadingText>
+            </Container>
+        );
+    }
 
     return (
         <Container>
@@ -204,7 +261,7 @@ const WalletInfo = ({
                         <InfoRow>
                             <Label>Account Name:</Label>
                             <Value>{account.accountName}</Value>
-                        </InfoRow> 
+                        </InfoRow>
                         <InfoRow>
                             <Label>Address:</Label>
                             <Value title={account.address}>
@@ -232,31 +289,56 @@ const WalletInfo = ({
             </Frame>
 
             <Frame boxShadow="in" padding="8px">
-                <Fieldset legend={`Prediction Tokens (${walletData.tokens.length} positions)`}>
+                <Fieldset legend={`Prediction Tokens (${totalPositions} markets, ${userTokens.length} positions)`}>
                     <InfoRow>
                         <Label>Total Token Value:</Label>
-                        <Value>{totalTokenValue.toFixed(2)} tokens</Value>
+                        <Value>{totalTokenValue.toFixed(2)} MAS</Value>
                     </InfoRow>
 
                     <TokenList>
-                        {walletData.tokens.length === 0 ? (
-                            <div style={{
-                                padding: '20px',
-                                textAlign: 'center',
-                                color: '#666',
-                                fontSize: '11px'
-                            }}>
+                        {isLoading ? (
+                            <LoadingText>
+                                Loading positions...
+                            </LoadingText>
+                        ) : userTokens.length === 0 ? (
+                            <LoadingText>
                                 No prediction tokens held
-                            </div>
+                            </LoadingText>
                         ) : (
-                            walletData.tokens.map((token, index) => (
-                                <TokenItem key={`${token.marketId}-${token.tokenType}-${index}`}>
+                            userTokens.map((token, index) => (
+                                <TokenItem 
+                                    key={`${token.marketId}-${token.tokenType}-${index}`}
+                                    style={getTokenStyle(token)}
+                                    onClick={() => {
+                                        const market = markets.find(m => m.id === token.marketId);
+                                        onMarketClick && market && onMarketClick(market)
+                                    }}
+                                >
                                     <TokenInfo>
-                                        <MarketName>{token.marketName}</MarketName>
-                                        <TokenType>{token.tokenType} Position</TokenType>
+                                        <MarketName title={token.marketName}>
+                                            {token.marketName.length > 50 
+                                                ? `${token.marketName.slice(0, 50)}...` 
+                                                : token.marketName
+                                            }
+                                        </MarketName>
+                                        <TokenType>
+                                            {token.tokenType} Position
+                                            {token.marketStatus === 'resolved' && (
+                                                <span style={{ marginLeft: '4px' }}>
+                                                    • {((token.tokenType === 'YES' && token.resolutionResult) || 
+                                                       (token.tokenType === 'NO' && !token.resolutionResult)) 
+                                                       ? 'WON' : 'LOST'}
+                                                </span>
+                                            )}
+                                            {token.marketStatus === 'expired' && (
+                                                <span style={{ marginLeft: '4px', color: '#FF6B6B' }}>
+                                                    • EXPIRED
+                                                </span>
+                                            )}
+                                        </TokenType>
                                     </TokenInfo>
                                     <TokenBalance tokenType={token.tokenType}>
-                                        {parseFloat(token.balance).toFixed(2)}
+                                        {parseFloat(token.balance).toFixed(2)} MAS
                                     </TokenBalance>
                                 </TokenItem>
                             ))
@@ -266,10 +348,10 @@ const WalletInfo = ({
             </Frame>
 
             <ButtonGroup>
-                <Button onClick={handleRefresh}>
-                    Refresh
+                <Button onClick={handleRefresh} disabled={isLoading || !account}>
+                    {isLoading ? 'Refreshing...' : 'Refresh'}
                 </Button>
-                <Button onClick={handleCopyAddress}>
+                <Button onClick={handleCopyAddress} disabled={!account}>
                     Copy Address
                 </Button>
                 {onClose && (

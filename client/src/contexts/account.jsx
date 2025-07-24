@@ -6,17 +6,17 @@ import { Mas, Account, JsonRpcProvider, SmartContract, OperationStatus, Args, by
 export const AccountContext = createContext({})
 
 const Provider = ({ children }) => {
- 
+
     const [values, dispatch] = useReducer(
         (curVal, newVal) => ({ ...curVal, ...newVal }),
         {
             account: undefined,
-            provider: undefined
+            provider: undefined,
         }
     )
 
-    const { provider, account } = values
- 
+    const { provider, account, tick } = values
+
     const disconnect = () => {
         dispatch({
             account: undefined
@@ -29,9 +29,73 @@ const Provider = ({ children }) => {
         })
     }
 
+    const getUserPositions = useCallback(async (account) => {
+
+        const contract = new SmartContract(account, CONTRACT_ADDRESS)
+
+        const args = new Args()
+            .addString(account.address)
+            .addU64(BigInt(0))
+            .addU64(BigInt(10))
+
+        const result = await contract.read('getUserPositions', args)
+        const resultArgs = new Args(result.value);
+
+        let positions = []
+
+        try {
+            while (true) {
+                const marketId = resultArgs.nextString()
+                const totalYes = resultArgs.nextU64()
+                const totalNo = resultArgs.nextU64()
+                positions.push({
+                    marketId,
+                    totalYes: Number(totalYes) / 1000000000,
+                    totalNo: Number(totalNo) / 1000000000
+                })
+            }
+        } catch {
+            // End of arguments reached
+        }
+
+        return positions
+
+    }, [])
+
+    const getUserPosition = useCallback(async (marketId, account) => {
+
+        const contract = new SmartContract(account, CONTRACT_ADDRESS)
+
+        const args = new Args()
+            .addString(marketId)
+            .addString(account.address)
+
+        const result = await contract.read('getUserPosition', args)
+        const resultArgs = new Args(result.value);
+
+        let position = {
+            totalYes: 0,
+            totalNo: 0
+        }
+
+        try {
+            while (true) {
+                const totalYes = resultArgs.nextU64()
+                const totalNo = resultArgs.nextU64()
+                position.totalYes = Number(totalYes) / 1000000000
+                position.totalNo = Number(totalNo) / 1000000000
+            }
+        } catch {
+            // End of arguments reached
+        }
+
+        return position
+
+    }, [])
+
     const placeBet = useCallback(async (marketId, isYes, amount) => {
- 
-        if (!account) { 
+
+        if (!account) {
             throw new Error("Wallet not connected")
         }
 
@@ -56,7 +120,7 @@ const Provider = ({ children }) => {
         const status = await operation.waitFinalExecution();
         console.log('Operation status:', OperationStatus[status]);
 
-        if (status !== OperationStatus.Success) { 
+        if (status !== OperationStatus.Success) {
             throw new Error("Operation failed")
         }
 
@@ -73,12 +137,15 @@ const Provider = ({ children }) => {
                     provider
                 })
             },
-            placeBet
+            placeBet,
+            getUserPositions,
+            getUserPosition
         }),
         [
             account,
             provider,
-            placeBet
+            placeBet,
+            getUserPositions
         ]
     )
 

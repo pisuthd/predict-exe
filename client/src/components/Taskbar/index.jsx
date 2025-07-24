@@ -98,13 +98,14 @@ const TaskbarContainer = ({
                 <WalletInfo
                     onCopyAddress={(address) => navigator.clipboard.writeText(address)}
                     onClose={() => closeModal("walletInfo")}
+                    onMarketClick={onMarketClick}
                 />
             ),
             props: {
                 icon: <Password1000 variant="32x32_4" />,
                 title: "Wallet Information",
                 titleBarOptions: [<TitleBar.Close key="close" onClick={() => closeModal("walletInfo")} />],
-                width: "400px",
+                width: "500px",
                 dragOptions: {
                     defaultPosition: getDynamicPosition(2, 'walletInfo')
                 }
