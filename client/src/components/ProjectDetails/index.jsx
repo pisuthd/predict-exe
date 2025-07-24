@@ -171,12 +171,13 @@ const ProjectDetails = ({ project: market, onClose }) => {
   const [buyAmount, setBuyAmount] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
+  const [tick, setTick] = useState(1)
 
   const [position, setPosition] = useState(undefined)
 
   useEffect(() => {
     market && account && getUserPosition(market.id, account).then(setPosition)
-  }, [account, market])
+  }, [account, market, tick])
 
 
   // Helper functions 
@@ -256,6 +257,7 @@ const ProjectDetails = ({ project: market, onClose }) => {
       setError('');
 
       // Refresh positions
+      setTick(prev => prev + 1)
 
     } catch (err) {
       console.error('Error placing bet:', err);
