@@ -162,6 +162,17 @@ const ErrorMessage = styled.div`
   border-radius: 2px;
 `;
 
+const WalletWarning = styled.div`
+  background: #fff3cd;
+  border: 1px solid #ffeaa7;
+  padding: 12px;
+  margin: 8px 0;
+  font-size: 11px;
+  color: #856404;
+  border-radius: 2px;
+  text-align: center;
+`;
+
 const ProjectDetails = ({ project: market, onClose }) => {
 
   const { account, placeBet, getUserPosition } = useContext(AccountContext);
@@ -290,6 +301,11 @@ const ProjectDetails = ({ project: market, onClose }) => {
   return (
     <>
       <DetailsContainer>
+        {!account && (
+          <WalletWarning>
+            ⚠️ Please connect your wallet to create a prediction market
+          </WalletWarning>
+        )}
         <Frame boxShadow="in" padding="8px">
           <Fieldset legend="Market Details">
             <InfoSection>
@@ -383,14 +399,14 @@ const ProjectDetails = ({ project: market, onClose }) => {
           <Button
             onClick={handleBuyYes}
             style={{ backgroundColor: '#90EE90' }}
-            disabled={market.resolved || market.isExpired}
+            disabled={ !account || market.resolved || market.isExpired}
           >
             Buy YES
           </Button>
           <Button
             onClick={handleBuyNo}
             style={{ backgroundColor: '#FFB6C1' }}
-            disabled={market.resolved || market.isExpired}
+            disabled={!account || market.resolved || market.isExpired}
           >
             Buy NO
           </Button>
