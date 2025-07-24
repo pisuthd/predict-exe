@@ -76,7 +76,7 @@ const Desktop = ({ onMarketClick, toggleModal }) => {
 
     return { days, hours };
   };
-  
+
   // Create static icons and position markets
   const { staticIcons, marketsWithPositions } = useMemo(() => {
     const iconWidth = 90;
@@ -161,18 +161,15 @@ const Desktop = ({ onMarketClick, toggleModal }) => {
             </IconWrapper>
             <MarketLabel>{market.question}</MarketLabel>
 
-            {hours > 0 ?
-              (
-                <StatusInfo color="#90EE90">
-                  { days > 0 ? `${days} days left` : `${hours} hours left` }
-                </StatusInfo>
-              ) :
-              (
-                <StatusInfo color="#FF6B6B">
-                  EXPIRED
-                </StatusInfo>
-              )
-            } 
+            {(days > 0 || hours > 0) ? (
+              <StatusInfo color="#90EE90">
+                {days > 0 ? `${days} days left` : `${hours} hours left`}
+              </StatusInfo>
+            ) : (
+              <StatusInfo color="#FF6B6B">
+                EXPIRED
+              </StatusInfo>
+            )}
           </MarketIcon>
         );
       })}

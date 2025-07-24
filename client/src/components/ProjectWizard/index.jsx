@@ -1,6 +1,7 @@
-import React from 'react';
+import React, { useContext } from 'react';
 import { Button, Input, Frame, Fieldset } from '@react95/core';
 import styled from 'styled-components';
+import { AccountContext } from '../../contexts/account';
 
 const WizardContainer = styled.div`
   padding: 16px;
@@ -165,9 +166,58 @@ const HelpText = styled.div`
   font-style: italic;
 `;
 
+const LoadingSpinner = styled.div`
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border: 2px solid #c0c0c0;
+  border-radius: 50%;
+  border-top-color: #000080;
+  animation: spin 1s ease-in-out infinite;
+  margin-right: 6px;
+  
+  @keyframes spin {
+    to { transform: rotate(360deg); }
+  }
+`;
+
+const ErrorMessage = styled.div`
+  background: #ffcccc;
+  border: 1px solid #ff6666;
+  padding: 8px;
+  margin: 8px 0;
+  font-size: 11px;
+  color: #cc0000;
+  border-radius: 2px;
+`;
+
+const SuccessMessage = styled.div`
+  background: #ccffcc;
+  border: 1px solid #66ff66;
+  padding: 8px;
+  margin: 8px 0;
+  font-size: 11px;
+  color: #006600;
+  border-radius: 2px;
+`;
+
+const WalletWarning = styled.div`
+  background: #fff3cd;
+  border: 1px solid #ffeaa7;
+  padding: 12px;
+  margin: 8px 0;
+  font-size: 11px;
+  color: #856404;
+  border-radius: 2px;
+  text-align: center;
+`;
+
 const PredictionMarketWizard = ({ onSubmit, onCancel }) => {
+
+  const { account, createMarket } = useContext(AccountContext);
+
   const [formData, setFormData] = React.useState({
-    asset: 'MASA',
+    asset: 'MAS',
     direction: 'reach',
     targetPrice: '',
     currentPrice: '',
@@ -178,12 +228,17 @@ const PredictionMarketWizard = ({ onSubmit, onCancel }) => {
   const [showStakeModal, setShowStakeModal] = React.useState(false);
   const [selectedPosition, setSelectedPosition] = React.useState('');
   const [stakeAmount, setStakeAmount] = React.useState('');
+  const [isCreating, setIsCreating] = React.useState(false);
+  const [error, setError] = React.useState('');
+  const [success, setSuccess] = React.useState('');
 
   const handleInputChange = (field, value) => {
     setFormData(prev => ({
       ...prev,
       [field]: value
     }));
+    // Clear any previous errors when user starts typing
+    if (error) setError('');
   };
 
   const generateQuestion = () => {
@@ -204,9 +259,17 @@ const PredictionMarketWizard = ({ onSubmit, onCancel }) => {
   };
 
   const handleCreateMarket = () => {
+    setError('');
+    
+    // Check wallet connection first
+    if (!account) {
+      setError('Please connect your wallet to create a market');
+      return;
+    }
+
     // Validate basic form first
     if (!formData.asset || !formData.targetPrice || !formData.deadline) {
-      alert('Please fill in all required fields (Asset, Target Price, Deadline)');
+      setError('Please fill in all required fields (Asset, Target Price, Deadline)');
       return;
     }
 
@@ -216,58 +279,120 @@ const PredictionMarketWizard = ({ onSubmit, onCancel }) => {
       const target = parseFloat(formData.targetPrice);
 
       if (formData.direction === 'reach' && current >= target) {
-        alert('For "reach" prediction, current price should be below target price');
+        setError('For "reach" prediction, current price should be below target price');
         return;
       }
 
       if (formData.direction === 'drop' && current <= target) {
-        alert('For "drop" prediction, current price should be above target price');
+        setError('For "drop" prediction, current price should be above target price');
         return;
       }
+    }
+
+    // Check if deadline is in the future
+    const deadlineDate = new Date(formData.deadline);
+    const now = new Date();
+    if (deadlineDate <= now) {
+      setError('Deadline must be in the future');
+      return;
     }
 
     // Show stake modal
     setShowStakeModal(true);
   };
 
-  const handleConfirmStake = () => {
+  const handleConfirmStake = async () => {
+    setError('');
+    setSuccess('');
+
     if (!selectedPosition) {
-      alert('Please select your position (YES or NO)');
+      setError('Please select your position (YES or NO)');
       return;
     }
 
     if (!stakeAmount || parseFloat(stakeAmount) < 1) {
-      alert('Please enter a stake amount of at least 1 MAS');
+      setError('Please enter a stake amount of at least 1 MAS');
       return;
     }
 
-    const marketData = {
-      question: generateQuestion(),
-      asset: formData.asset,
-      direction: formData.direction,
-      targetPrice: parseFloat(formData.targetPrice),
-      currentPrice: formData.currentPrice ? parseFloat(formData.currentPrice) : null,
-      deadline: formData.deadline,
-      dataSource: formData.dataSource,
-      creatorPosition: selectedPosition,
-      creatorStake: parseFloat(stakeAmount),
-      daysLeft: Math.ceil((new Date(formData.deadline) - new Date()) / (1000 * 60 * 60 * 24))
-    };
+    if (!account) {
+      setError('Wallet connection lost. Please reconnect your wallet');
+      return;
+    }
 
-    // Close modal and submit
-    setShowStakeModal(false);
-    onSubmit(marketData);
+    setIsCreating(true);
+
+    try {
+      const marketData = {
+        asset: formData.asset,
+        direction: formData.direction,
+        targetPrice: parseFloat(formData.targetPrice),
+        currentPrice: formData.currentPrice ? parseFloat(formData.currentPrice) : null,
+        deadline: formData.deadline,
+        dataSource: formData.dataSource,
+        creatorPosition: selectedPosition,
+        creatorStake: parseFloat(stakeAmount)
+      };
+
+      console.log('Creating market with data:', marketData);
+
+      const result = await createMarket(marketData);
+      
+      console.log('Market creation result:', result);
+
+      // Show success message
+      setSuccess('Market created successfully!');
+      
+      // Close modal after a delay to show success message
+      setTimeout(() => {
+        setShowStakeModal(false);
+        
+        // Call onSubmit with the result for parent component to handle
+        onSubmit({
+          ...marketData,
+          question: generateQuestion(),
+          daysLeft: Math.ceil((new Date(formData.deadline) - new Date()) / (1000 * 60 * 60 * 24)),
+          operationId: result.operationId,
+          marketId: result.marketId,
+          success: true
+        });
+      }, 2000);
+
+    } catch (err) {
+      console.error('Error creating market:', err);
+      
+      // Handle different types of errors
+      let errorMessage = 'Failed to create market. Please try again.';
+      
+      if (err.message) {
+        if (err.message.includes('insufficient')) {
+          errorMessage = 'Insufficient balance. Please check your MAS balance.';
+        } else if (err.message.includes('Wallet not connected')) {
+          errorMessage = 'Wallet not connected. Please connect your wallet.';
+        } else if (err.message.includes('rejected')) {
+          errorMessage = 'Transaction was rejected by user.';
+        } else if (err.message.includes('network')) {
+          errorMessage = 'Network error. Please check your connection.';
+        } else {
+          errorMessage = err.message;
+        }
+      }
+      
+      setError(errorMessage);
+    } finally {
+      setIsCreating(false);
+    }
   };
-
-  // const calculateEstimatedShares = () => {
-  //   const amount = parseFloat(stakeAmount) || 0;
-  //   // For initial market creation, assume 0.5 price (50/50 split)
-  //   return amount / 0.5;
-  // };
 
   return (
     <>
       <WizardContainer>
+        {!account && (
+          <WalletWarning>
+            ⚠️ Please connect your wallet to create a prediction market
+          </WalletWarning>
+        )}
+
         <Frame boxShadow="in" padding="8px">
           <Fieldset legend="Prediction Market Setup">
             <TwoColumnGrid>
@@ -276,8 +401,9 @@ const PredictionMarketWizard = ({ onSubmit, onCancel }) => {
                 <Input
                   value={formData.asset}
                   onChange={(e) => handleInputChange('asset', e.target.value)}
-                  placeholder="e.g., MASA, BTC, ETH"
+                  placeholder="e.g., MAS, BTC, ETH"
                   style={{ width: '100%' }}
+                  disabled={!account}
                 />
               </FormSection>
 
@@ -290,9 +416,10 @@ const PredictionMarketWizard = ({ onSubmit, onCancel }) => {
                     width: '100%',
                     padding: '2px 4px',
                     border: '1px inset #c0c0c0',
-                    background: 'white',
+                    background: account ? 'white' : '#f0f0f0',
                     fontSize: '11px'
                   }}
+                  disabled={!account}
                 >
                   <option value="UMBRELLA_MAS_PRICE">UMBRELLA_MAS_PRICE</option>
                   <option value="UMBRELLA_BTC_PRICE">UMBRELLA_BTC_PRICE</option>
@@ -311,6 +438,7 @@ const PredictionMarketWizard = ({ onSubmit, onCancel }) => {
                       value="reach"
                       checked={formData.direction === 'reach'}
                       onChange={(e) => handleInputChange('direction', e.target.value)}
+                      disabled={!account}
                     />
                     Reach
                   </RadioOption>
@@ -321,6 +449,7 @@ const PredictionMarketWizard = ({ onSubmit, onCancel }) => {
                       value="drop"
                       checked={formData.direction === 'drop'}
                       onChange={(e) => handleInputChange('direction', e.target.value)}
+                      disabled={!account}
                     />
                     Drop
                   </RadioOption>
@@ -332,8 +461,12 @@ const PredictionMarketWizard = ({ onSubmit, onCancel }) => {
                 <Input
                   value={formData.targetPrice}
                   onChange={(e) => handleInputChange('targetPrice', e.target.value)}
-                  placeholder="e.g., 1.0"
+                  placeholder="e.g., 0.1"
                   style={{ width: '100%' }}
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  disabled={!account}
                 />
               </FormSection>
 
@@ -342,8 +475,12 @@ const PredictionMarketWizard = ({ onSubmit, onCancel }) => {
                 <Input
                   value={formData.currentPrice}
                   onChange={(e) => handleInputChange('currentPrice', e.target.value)}
-                  placeholder="e.g., 0.85"
+                  placeholder="e.g., 0.03"
                   style={{ width: '100%' }}
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  disabled={!account}
                 />
               </FormSection>
 
@@ -354,6 +491,8 @@ const PredictionMarketWizard = ({ onSubmit, onCancel }) => {
                   value={formData.deadline}
                   onChange={(e) => handleInputChange('deadline', e.target.value)}
                   style={{ width: '100%' }}
+                  disabled={!account}
+                  min={new Date().toISOString().slice(0, 16)}
                 />
               </FormSection>
 
@@ -363,13 +502,25 @@ const PredictionMarketWizard = ({ onSubmit, onCancel }) => {
                   {generateQuestion()}
                 </PreviewText>
               </FullWidthSection>
+
+              {error && (
+                <FullWidthSection>
+                  <ErrorMessage>
+                    {error}
+                  </ErrorMessage>
+                </FullWidthSection>
+              )}
             </TwoColumnGrid>
           </Fieldset>
         </Frame>
 
         <ButtonGroup>
           <Button onClick={onCancel}>Cancel</Button>
-          <Button onClick={handleCreateMarket} style={{ fontWeight: 'bold' }}>
+          <Button 
+            onClick={handleCreateMarket} 
+            style={{ fontWeight: 'bold' }}
+            disabled={!account}
+          >
             Next
           </Button>
         </ButtonGroup>
@@ -377,11 +528,16 @@ const PredictionMarketWizard = ({ onSubmit, onCancel }) => {
 
       {/* Stake Modal */}
       {showStakeModal && (
-        <ModalOverlay onClick={() => setShowStakeModal(false)}>
+        <ModalOverlay onClick={() => !isCreating && setShowStakeModal(false)}>
           <StakeModal onClick={(e) => e.stopPropagation()}>
             <StakeModalHeader>
               <span>Initialize Market - Set Your Position</span>
-              <CloseButton onClick={() => setShowStakeModal(false)}>×</CloseButton>
+              <CloseButton 
+                onClick={() => setShowStakeModal(false)}
+                disabled={isCreating}
+              >
+                ×
+              </CloseButton>
             </StakeModalHeader>
             
             <Frame boxShadow="in" padding="8px" style={{ marginBottom: '12px' }}>
@@ -416,12 +572,14 @@ const PredictionMarketWizard = ({ onSubmit, onCancel }) => {
                   <PositionButton
                     selected={selectedPosition === 'YES'}
                     onClick={() => setSelectedPosition('YES')}
+                    disabled={isCreating}
                   >
                     YES
                   </PositionButton>
                   <PositionButton
                     selected={selectedPosition === 'NO'}
                     onClick={() => setSelectedPosition('NO')}
+                    disabled={isCreating}
                   >
                     NO
                   </PositionButton>
@@ -439,16 +597,13 @@ const PredictionMarketWizard = ({ onSubmit, onCancel }) => {
                         step="0.01"
                         min="1"
                         style={{ flex: 1 }}
+                        disabled={isCreating}
                       />
                       <span style={{ fontSize: '11px' }}>MAS</span>
                     </InputRow>
                     
                     {stakeAmount && (
                       <>
-                        {/* <CalculationRow>
-                          <span>Estimated Shares:</span>
-                          <span>{calculateEstimatedShares().toFixed(2)}</span>
-                        </CalculationRow> */}
                         <CalculationRow>
                           <span>Your Position:</span>
                           <span style={{ fontWeight: 'bold', color: selectedPosition === 'YES' ? '#008000' : '#800000' }}>
@@ -463,22 +618,39 @@ const PredictionMarketWizard = ({ onSubmit, onCancel }) => {
                     )} 
                   </>
                 )}
+
+                {error && (
+                  <ErrorMessage>
+                    {error}
+                  </ErrorMessage>
+                )}
+
+                {success && (
+                  <SuccessMessage>
+                    {success}
+                  </SuccessMessage>
+                )}
               </Fieldset>
             </Frame>
 
             <ButtonGroup style={{ marginTop: '16px' }}>
-              <Button onClick={() => setShowStakeModal(false)}>
+              <Button 
+                onClick={() => setShowStakeModal(false)}
+                disabled={isCreating}
+              >
                 Back to Edit
               </Button>
               <Button 
                 onClick={handleConfirmStake}
                 style={{ 
                   backgroundColor: selectedPosition === 'YES' ? '#90EE90' : selectedPosition === 'NO' ? '#FFB6C1' : '#c0c0c0',
-                  fontWeight: 'bold' 
+                  fontWeight: 'bold',
+                  opacity: isCreating ? 0.7 : 1
                 }}
-                disabled={!selectedPosition || !stakeAmount}
+                disabled={!selectedPosition || !stakeAmount || isCreating || !account}
               >
-                Create Market
+                {isCreating && <LoadingSpinner />}
+                {isCreating ? 'Creating Market...' : 'Create Market'}
               </Button>
             </ButtonGroup>
           </StakeModal>
