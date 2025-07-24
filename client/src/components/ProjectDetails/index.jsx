@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useContext, useState, useCallback } from 'react';
 import { Button, Frame, Fieldset, Input } from '@react95/core';
 import styled from 'styled-components';
+import { AccountContext } from '../../contexts/account';
 
 const DetailsContainer = styled.div`
   padding: 16px;
@@ -136,21 +137,40 @@ const InputLabel = styled.label`
   min-width: 60px;
 `;
 
-const CalculationRow = styled.div`
-  display: flex;
-  justify-content: space-between;
-  font-size: 10px;
-  color: #666;
-  margin: 4px 0;
+const LoadingSpinner = styled.div`
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border: 2px solid #c0c0c0;
+  border-radius: 50%;
+  border-top-color: #000080;
+  animation: spin 1s ease-in-out infinite;
+  margin-right: 6px;
+  
+  @keyframes spin {
+    to { transform: rotate(360deg); }
+  }
+`;
+
+const ErrorMessage = styled.div`
+  background: #ffcccc;
+  border: 1px solid #ff6666;
+  padding: 8px;
+  margin: 8px 0;
+  font-size: 11px;
+  color: #cc0000;
+  border-radius: 2px;
 `;
 
 const ProjectDetails = ({ project: market, onClose }) => {
 
-
+  const { account, placeBet } = useContext(AccountContext);
 
   const [showBuyModal, setShowBuyModal] = useState(false);
   const [buyType, setBuyType] = useState(''); // 'yes' or 'no'
   const [buyAmount, setBuyAmount] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState('');
 
   // Mock user positions - replace with real data
   const userPosition = {
@@ -160,7 +180,6 @@ const ProjectDetails = ({ project: market, onClose }) => {
   };
 
   // Helper functions 
-
   const getTimeLeft = (expirationTimestamp) => {
     const now = Date.now();
     const timeLeft = expirationTimestamp - now;
@@ -181,15 +200,7 @@ const ProjectDetails = ({ project: market, onClose }) => {
       minute: '2-digit'
     });
   };
-
-  // const calculatePrices = (yesPool, noPool, totalPool) => {
-  //   if (totalPool === 0) return { yesPrice: 0.5, noPrice: 0.5 };
-  //   return {
-  //     yesPrice: yesPool / totalPool,
-  //     noPrice: noPool / totalPool
-  //   };
-  // };
-
+ 
   const getMarketStatus = () => {
     if (market.resolved) return 'resolved';
     if (market.isExpired) return 'expired';
@@ -199,7 +210,6 @@ const ProjectDetails = ({ project: market, onClose }) => {
   // Calculate derived values 
   const { days, hours } = getTimeLeft(market.expirationTimestamp);
   const expirationDate = formatDate(market.expirationTimestamp);
-  // const { yesPrice, noPrice } = calculatePrices(market.yesPool, market.noPool, market.totalPool);
   const status = getMarketStatus();
 
   // Calculate percentages for display
@@ -208,38 +218,72 @@ const ProjectDetails = ({ project: market, onClose }) => {
 
   const handleBuyYes = () => {
     setBuyType('yes');
+    setError(''); // Clear any previous errors
     setShowBuyModal(true);
   };
 
   const handleBuyNo = () => {
     setBuyType('no');
+    setError(''); // Clear any previous errors
     setShowBuyModal(true);
   };
 
-  const handleConfirmBuy = () => {
-    const amount = parseFloat(buyAmount);
-    if (!amount || amount <= 0) {
-      alert('Please enter a valid amount');
+  const handleConfirmBuy = useCallback(async () => {
+    if (!market) {
       return;
     }
 
-    const price = buyType === 'yes' ? yesPrice : noPrice;
-    const estimatedShares = amount / price;
+    const amount = parseFloat(buyAmount);
+    if (!amount || amount <= 0) {
+      setError('Please enter a valid amount');
+      return;
+    }
 
-    alert(`Confirmed: Buying ${estimatedShares.toFixed(2)} ${buyType.toUpperCase()} shares for ${amount} MAS`);
+    if (!account) {
+      setError('Please connect your wallet first');
+      return;
+    }
 
-    // Here you would call your smart contract function
-    // await buyShares(market.id, buyType, amount);
+    setIsLoading(true);
+    setError('');
 
-    setShowBuyModal(false);
-    setBuyAmount('');
-  };
+    try {
+      await placeBet(market.id, buyType === 'yes', `${amount}`);
+      
+      // Success - close modal and reset
+      setShowBuyModal(false);
+      setBuyAmount('');
+      setError('');
+      
+      // Refresh positions
 
-  const calculateEstimatedShares = () => {
-    const amount = parseFloat(buyAmount) || 0;
-    const price = buyType === 'yes' ? yesPrice : noPrice;
-    return amount / price;
-  };
+    } catch (err) {
+      console.error('Error placing bet:', err);
+      
+      // Handle different types of errors
+      let errorMessage = 'Failed to place bet. Please try again.';
+      
+      if (err.message) {
+        if (err.message.includes('insufficient')) {
+          errorMessage = 'Insufficient balance. Please check your MAS balance.';
+        } else if (err.message.includes('expired')) {
+          errorMessage = 'Market has expired. Cannot place new bets.';
+        } else if (err.message.includes('resolved')) {
+          errorMessage = 'Market has been resolved. Cannot place new bets.';
+        } else if (err.message.includes('network')) {
+          errorMessage = 'Network error. Please check your connection.';
+        } else if (err.message.includes('rejected')) {
+          errorMessage = 'Transaction was rejected by user.';
+        } else {
+          errorMessage = err.message;
+        }
+      }
+      
+      setError(errorMessage);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [market, placeBet, buyAmount, buyType, account]);
 
   return (
     <>
@@ -353,10 +397,6 @@ const ProjectDetails = ({ project: market, onClose }) => {
             </BuyModalHeader>
 
             <Frame boxShadow="in" padding="8px">
-              {/* <InfoRow>
-                <Label>Current Price:</Label>
-                <Value>{(buyType === 'yes' ? yesPrice : noPrice).toFixed(3)} MAS per share</Value>
-              </InfoRow> */}
               <InfoRow>
                 <Label>Current Staked:</Label>
                 <Value>{(buyType === 'yes' ? market.yesPoolMAS : market.noPoolMAS).toFixed(3)} MAS</Value>
@@ -377,33 +417,48 @@ const ProjectDetails = ({ project: market, onClose }) => {
                   type="number"
                   step="0.01"
                   style={{ flex: 1 }}
+                  disabled={isLoading}
                 />
                 <span style={{ fontSize: '11px' }}>MAS</span>
-              </InputRow>
-
-              {buyAmount && (
-                <>
-                  <CalculationRow>
-                    <span>Estimated Shares:</span>
-                    <span>{calculateEstimatedShares().toFixed(2)}</span>
-                  </CalculationRow>
-                  <CalculationRow>
-                    <span>Potential Payout (if win):</span>
-                    <span>{parseFloat(buyAmount || 0).toFixed(2)} MAS</span>
-                  </CalculationRow>
-                </>
+              </InputRow> 
+              
+              {error && (
+                <ErrorMessage>
+                  {error}
+                </ErrorMessage>
+              )}
+              
+              {!account && (
+                <div style={{ 
+                  textAlign: "center", 
+                  fontSize: "11px", 
+                  marginTop: "10px",
+                  color: "#666",
+                  fontStyle: "italic"
+                }}>
+                  Wallet is not connected
+                </div>
               )}
             </div>
 
             <ButtonGroup>
-              <Button onClick={() => setShowBuyModal(false)}>
+              <Button 
+                onClick={() => setShowBuyModal(false)}
+                disabled={isLoading}
+              >
                 Cancel
               </Button>
               <Button
                 onClick={handleConfirmBuy}
-                style={{ backgroundColor: buyType === 'yes' ? '#90EE90' : '#FFB6C1', fontWeight: 'bold' }}
+                style={{ 
+                  backgroundColor: buyType === 'yes' ? '#90EE90' : '#FFB6C1', 
+                  fontWeight: 'bold',
+                  opacity: isLoading ? 0.7 : 1
+                }}
+                disabled={isLoading || !account || !buyAmount}
               >
-                Confirm Buy
+                {isLoading && <LoadingSpinner />}
+                {isLoading ? 'Processing...' : 'Confirm Buy'}
               </Button>
             </ButtonGroup>
           </BuyModal>

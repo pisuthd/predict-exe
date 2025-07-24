@@ -1,11 +1,11 @@
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useReducer, useState } from "react"
 import { Account, JsonRpcProvider, SmartContract, Args, bytesToArray, bytesToStr, bytesToSerializableObjectArray } from '@massalabs/massa-web3'
- 
+
 
 export const MarketContext = createContext({})
 
-const CONTRACT_ADDRESS = "AS122SBruA42oQN7Ucq8QgZ9zx2QuNpdCi7hdf7MyX6ptx4Xc7csW"
+export const CONTRACT_ADDRESS = "AS122SBruA42oQN7Ucq8QgZ9zx2QuNpdCi7hdf7MyX6ptx4Xc7csW"
 
 const Provider = ({ children }) => {
 
@@ -101,12 +101,12 @@ const Provider = ({ children }) => {
                 direction: details.nextBool(), // true = reach, false = drop
                 targetPrice: details.nextF64(),
                 currentPrice: details.nextF64(),
-                expirationTimestamp: details.nextU64(),
-                createdTimestamp: details.nextU64(),
+                expirationTimestamp: Number(details.nextU64()),
+                createdTimestamp: Number(details.nextU64()),
                 dataSource: details.nextString(),
-                yesPool: details.nextU64(),
-                noPool: details.nextU64(),
-                totalPool: details.nextU64(),
+                yesPool: Number(details.nextU64()),
+                noPool: Number(details.nextU64()),
+                totalPool: Number(details.nextU64()),
                 yesOdds: details.nextF64(),
                 noOdds: details.nextF64(),
                 resolved: details.nextBool(),
@@ -121,8 +121,6 @@ const Provider = ({ children }) => {
             marketData.yesPoolMAS = Number(marketData.yesPool) / 1000000000
             marketData.noPoolMAS = Number(marketData.noPool) / 1000000000
             marketData.totalPoolMAS = Number(marketData.totalPool) / 1000000000
-
-            console.log("marketData 2:", marketData)
 
             return marketData
         } catch (err) {

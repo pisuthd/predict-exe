@@ -1,13 +1,12 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useReducer, useState } from "react"
+import { CONTRACT_ADDRESS } from "./market"
+import { Mas, Account, JsonRpcProvider, SmartContract, OperationStatus, Args, bytesToArray, bytesToStr, bytesToSerializableObjectArray } from '@massalabs/massa-web3'
+
 
 export const AccountContext = createContext({})
 
 const Provider = ({ children }) => {
-
-    // const context = useWeb3React()
-
-    // const { account, activate, deactivate, error, chainId, library } = context
-
+ 
     const [values, dispatch] = useReducer(
         (curVal, newVal) => ({ ...curVal, ...newVal }),
         {
@@ -17,43 +16,7 @@ const Provider = ({ children }) => {
     )
 
     const { provider, account } = values
-
-
-    // // handle logic to recognize the connector currently being activated
-    // const [activatingConnector, setActivatingConnector] = useState()
-
-    // // handle logic to eagerly connect to the injected ethereum provider, if it exists and has granted access already
-    // const triedEager = useEagerConnect()
-
-    // // handle logic to connect in reaction to certain events on the injected ethereum provider, if it exists
-    // useInactiveListener(!triedEager || !!activatingConnector)
-
-    // const connect = (walletType = 0) => {
-    //     switch (walletType) {
-    //         case 1:
-    //             setActivatingConnector(Connectors[0].connector)
-    //             activate(Connectors[0].connector)
-    //             break
-    //         default:
-    //             setActivatingConnector(Connectors[0].connector)
-    //             activate(Connectors[0].connector)
-    //     }
-
-    // }
-
-    // const disconnect = () => {
-    //     deactivate()
-    //     setActivatingConnector()
-    //     activate()
-    // }
-
-    // const corrected = SUPPORT_CHAINS.includes(chainId)
-
-    // const getBalance = useCallback(async () => {
-    //     const balance = await library.getBalance(account)
-    //     return `${(Number(ethers.utils.formatEther(balance)).toLocaleString())}`
-    // }, [account, library])
-
+ 
     const disconnect = () => {
         dispatch({
             account: undefined
@@ -65,7 +28,40 @@ const Provider = ({ children }) => {
             account
         })
     }
+
+    const placeBet = useCallback(async (marketId, isYes, amount) => {
  
+        if (!account) { 
+            throw new Error("Wallet not connected")
+        }
+
+        const betArgs = new Args()
+            .addString(marketId)
+            .addBool(isYes)
+
+        const contract = new SmartContract(account, CONTRACT_ADDRESS)
+
+        const operation = await contract.call(
+            'placeBet',
+            betArgs,
+            { coins: Mas.fromString(amount) }
+        );
+
+        console.log(
+            'createMarket function called successfully, operation id:',
+            operation.id,
+        );
+
+        console.log('Waiting for operation to be finalized...');
+        const status = await operation.waitFinalExecution();
+        console.log('Operation status:', OperationStatus[status]);
+
+        if (status !== OperationStatus.Success) { 
+            throw new Error("Operation failed")
+        }
+
+    }, [provider, account])
+
     const accountContext = useMemo(
         () => ({
             account,
@@ -76,11 +72,13 @@ const Provider = ({ children }) => {
                 dispatch({
                     provider
                 })
-            }
+            },
+            placeBet
         }),
         [
             account,
-            provider
+            provider,
+            placeBet
         ]
     )
 
