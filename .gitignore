@@ -3,3 +3,5 @@ build
 .env
 
 backup/
+wallet_pisuthd.yaml
+client-old/
