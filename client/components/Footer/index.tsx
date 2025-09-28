@@ -6,33 +6,21 @@ export const Footer = () => {
     <footer className="relative z-10 mt-16 border-t-2 border-cyan-500/50 bg-black/90 backdrop-blur-sm font-mono">
       {/* Main Footer Content */}
       <div className="max-w-7xl mx-auto px-4 py-12">
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
-          
-          {/* Brand Section */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8"> 
           <div className="space-y-4">
-            <div className="flex items-center space-x-3">
-              <div className="relative">
-                <div className="w-10 h-10 bg-black border-2 border-cyan-500 flex items-center justify-center font-bold text-cyan-500 text-lg transform rotate-45">
-                  <span className="transform -rotate-45">P</span>
-                </div>
-                <div className="absolute -top-1 -right-1 w-3 h-3 bg-cyan-500 animate-pulse"></div>
-              </div>
+            <div className="flex items-center space-x-3"> 
               <div>
-                <h3 className="text-xl font-bold text-cyan-500 tracking-wider">PREDICT-EXE</h3>
-                <p className="text-xs text-gray-400">v1.0.0</p>
+                <h3 className="text-xl font-bold text-cyan-500 tracking-wider">PREDICT.EXE</h3> 
               </div>
             </div>
             <p className="text-gray-400 text-sm leading-relaxed">
-              The ultimate retro prediction market powered by Massa Network. 
-              Execute your predictions with style.
+              Bet on crypto price moves every 10 minutes with rounds settled automatically through Massa ASC
             </p>
             <div className="flex items-center space-x-2 text-xs">
               <div className="w-2 h-2 bg-green-500 animate-pulse"></div>
-              <span className="text-green-500">SYSTEM ONLINE</span>
+              <span className="text-green-500">Live on Buildnet</span>
             </div>
-          </div>
-
-          {/* Navigation Links */}
+          </div> 
           <div className="space-y-4">
             <h4 className="text-purple-400 font-bold tracking-wider text-sm border-b border-purple-500/30 pb-2">
               NAVIGATION
@@ -89,9 +77,9 @@ export const Footer = () => {
               </li>
             </ul>
             <div className="pt-2">
-              <a 
-                href="https://massa.net" 
-                target="_blank" 
+              <a
+                href="https://massa.net"
+                target="_blank"
                 rel="noopener noreferrer"
                 className="inline-flex items-center space-x-2 text-xs text-gray-400 hover:text-purple-400 transition-colors"
               >
@@ -108,20 +96,20 @@ export const Footer = () => {
             </h4>
             <div className="space-y-3">
               <div className="flex space-x-3">
-                <a 
-                  href="#" 
+                <a
+                  href="#"
                   className="w-8 h-8 border border-gray-600 hover:border-cyan-500 flex items-center justify-center transition-colors group"
                 >
                   <Twitter className="w-4 h-4 text-gray-400 group-hover:text-cyan-500" />
                 </a>
-                <a 
-                  href="#" 
+                <a
+                  href="#"
                   className="w-8 h-8 border border-gray-600 hover:border-cyan-500 flex items-center justify-center transition-colors group"
                 >
                   <Github className="w-4 h-4 text-gray-400 group-hover:text-cyan-500" />
                 </a>
-                <a 
-                  href="#" 
+                <a
+                  href="#"
                   className="w-8 h-8 border border-gray-600 hover:border-cyan-500 flex items-center justify-center transition-colors group"
                 >
                   <Globe className="w-4 h-4 text-gray-400 group-hover:text-cyan-500" />
@@ -148,15 +136,14 @@ export const Footer = () => {
         <div className="max-w-7xl mx-auto px-4 py-4">
           <div className="flex flex-col md:flex-row justify-between items-center space-y-2 md:space-y-0">
             <div className="flex items-center space-x-4 text-xs text-gray-500">
-              <span>© 2025 PREDICT-EXE</span>
+              <span>© 2025 PREDICT.EXE</span>
               <span>•</span>
               <span>BUILT ON MASSA NETWORK</span>
               <span>•</span>
               <span>DECENTRALIZED PREDICTIONS</span>
             </div>
-            
-            <div className="flex items-center space-x-4">
-              {/* Status Indicators */}
+
+            {/* <div className="flex items-center space-x-4"> 
               <div className="flex items-center space-x-2 text-xs">
                 <div className="flex items-center space-x-1">
                   <div className="w-2 h-2 bg-green-500 animate-pulse"></div>
@@ -171,7 +158,7 @@ export const Footer = () => {
                   <span className="text-purple-500">MASSA</span>
                 </div>
               </div>
-            </div>
+            </div> */}
           </div>
         </div>
       </div>
@@ -185,4 +172,3 @@ export const Footer = () => {
     </footer>
   );
 };
- 

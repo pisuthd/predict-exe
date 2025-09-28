@@ -9,6 +9,9 @@
     "lint": "eslint"
   },
   "dependencies": {
+    "@massalabs/massa-web3": "^5.2.0",
+    "@massalabs/react-ui-kit": "^1.1.0",
+    "@massalabs/wallet-provider": "^3.2.0",
     "lucide-react": "^0.544.0",
     "next": "15.5.4",
     "react": "19.1.0",

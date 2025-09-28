@@ -6,7 +6,7 @@ import BTCPrice from './BTCPrice';
 
 const MainPanel = () => {
 
-    const [timeLeft, setTimeLeft] = useState(3420); 
+    const [timeLeft, setTimeLeft] = useState(3420);
     const [selectedBet, setSelectedBet] = useState<any>(null);
     const [betAmount, setBetAmount] = useState('');
     const [terminalText, setTerminalText] = useState('SYSTEM READY...');
@@ -61,7 +61,7 @@ const MainPanel = () => {
                     </div>
                     <div className="border-t border-cyan-500/50 pt-2">
                         <div className="flex items-center justify-between">
-                            <BTCPrice/>
+                            <BTCPrice />
                             <div className="text-right">
                                 <p className="text-gray-400 text-sm">NEXT EXECUTION:</p>
                                 <p className="text-cyan-500 font-bold text-2xl font-mono">{formatTime(timeLeft)}</p>

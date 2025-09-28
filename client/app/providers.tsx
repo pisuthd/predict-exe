@@ -1,10 +1,12 @@
 'use client';
 
+import AccountProvider from "../contexts/account"
+
 export function Providers({ children }: any) {
 
     return (
-        <div>
+        <AccountProvider>
             {children}
-        </div>
+        </AccountProvider>
     )
 }
