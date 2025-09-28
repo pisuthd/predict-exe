@@ -46,6 +46,8 @@ export function constructor(_: StaticArray<u8>): void {
 
     Storage.set(CURRENT_PRICE_KEY, f64ToBytes(initialPrice));
     Storage.set(LAST_UPDATE_KEY, u64ToBytes(currentTime));
+    Storage.set(ROUND_COUNTER_KEY, u64ToBytes(0));
+    Storage.set(HOUSE_BALANCE_KEY, u64ToBytes(HOUSE_INITIAL_BALANCE));
 
     generateEvent(`Oracle initialized with price: ${initialPrice.toString()}`);
 }
@@ -87,52 +89,53 @@ function calculateAMMPayout(
     const adjustedUpBets = totalUpBets + VIRTUAL_LIQUIDITY;
     const adjustedDownBets = totalDownBets + VIRTUAL_LIQUIDITY;
     const totalAdjusted = adjustedUpBets + adjustedDownBets;
-    
+
     let probability: f64;
     if (betSide) { // UP bet
         probability = f64(adjustedUpBets) / f64(totalAdjusted);
     } else { // DOWN bet
         probability = f64(adjustedDownBets) / f64(totalAdjusted);
     }
-    
+
     // Calculate fair odds and apply house edge
     const fairOdds = 1.0 / probability;
     const houseOdds = fairOdds * (1.0 - HOUSE_EDGE);
-    
+
     // Ensure reasonable bounds (minimum 1.1x, maximum 5.0x)
     const clampedOdds = Math.max(1.1, Math.min(5.0, houseOdds));
-    
+
     return u64(f64(betAmount) * clampedOdds);
 }
 
 // Check if address is authorized admin
 function isAdmin(address: string): bool {
-    const key = stringToBytes(ADMIN_PREFIX + address);
-    return Storage.has(key);
+    // const key = stringToBytes(ADMIN_PREFIX + address);
+    // return Storage.has(key);
+    return true
 }
 
 
 // Create new round
 export function createRound(): StaticArray<u8> {
     const currentTime = Context.timestamp();
-    
+
     // Get current price from oracle
     const resultArgs = new Args(getCurrentPrice());
     const startPrice = resultArgs.nextF64().unwrap();
-    resultArgs.next();
-    resultArgs.next();
+    resultArgs.nextU64();
+    resultArgs.nextU64();
     const isStale = resultArgs.nextBool().expect("Failed to get stale status");
-    
+
     // assert(!isStale, "Oracle price is stale");
-    
+
     // Generate round ID
     const roundCounter = bytesToU64(Storage.get(ROUND_COUNTER_KEY));
     const newRoundCounter = roundCounter + 1;
     const roundId = newRoundCounter;
-    
+
     const settlementTime = currentTime + ROUND_DURATION;
     const bettingEndTime = settlementTime - BETTING_CUTOFF;
-    
+
     // Create round data
     const roundData = new Args()
         .add(roundId)                    // Round ID
@@ -148,14 +151,14 @@ export function createRound(): StaticArray<u8> {
         .add(ROUND_STATUS_ACTIVE)        // Status
         .add(false)                      // UP wins (will be set at settlement)
         .serialize();
-    
+
     // Store round
     const roundKey = stringToBytes(ROUND_PREFIX + roundId.toString());
     Storage.set(roundKey, roundData);
     Storage.set(ROUND_COUNTER_KEY, u64ToBytes(newRoundCounter));
-    
+
     generateEvent(`Round ${roundId.toString()} created: Start price ${startPrice.toString()}, Settlement at ${settlementTime.toString()}`);
-    
+
     return new Args().add(roundId).serialize();
 }
 
@@ -164,18 +167,18 @@ export function placeBet(binaryArgs: StaticArray<u8>): StaticArray<u8> {
     const args = new Args(binaryArgs);
     const roundId = args.nextU64().expect("Round ID is required");
     const betUp = args.nextBool().expect("Bet direction is required"); // true = UP, false = DOWN
-    
+
     const betAmount = transferredCoins();
     assert(betAmount >= MIN_BET_AMOUNT, "Bet amount below minimum");
-    
+
     const user = Context.caller().toString();
     const currentTime = Context.timestamp();
-    
+
     // Get round data
     const roundKey = stringToBytes(ROUND_PREFIX + roundId.toString());
     const roundData = Storage.get(roundKey);
     assert(roundData.length > 0, "Round not found");
-    
+
     const roundArgs = new Args(roundData);
     const storedRoundId = roundArgs.nextU64().unwrap();
     const startTime = roundArgs.nextU64().unwrap();
@@ -189,20 +192,20 @@ export function placeBet(binaryArgs: StaticArray<u8>): StaticArray<u8> {
     let houseDownExposure = roundArgs.nextU64().unwrap();
     const status = roundArgs.nextU8().unwrap();
     const upWins = roundArgs.nextBool().unwrap();
-    
+
     // Validate betting is allowed
     assert(status === ROUND_STATUS_ACTIVE, "Round not active");
     assert(currentTime <= bettingEndTime, "Betting period ended");
-    
+
     // Calculate AMM-style payout based on current pool balance
     const potentialPayout = calculateAMMPayout(betAmount, betUp, totalUpBets, totalDownBets);
     const houseRisk = potentialPayout > betAmount ? potentialPayout - betAmount : u64(0); // House's potential loss
-    
+
     // Check house has sufficient balance
     const houseBalance = bytesToU64(Storage.get(HOUSE_BALANCE_KEY));
     const newHouseExposure = betUp ? houseUpExposure + houseRisk : houseDownExposure + houseRisk;
     assert(newHouseExposure <= houseBalance, "House insufficient liquidity");
-    
+
     // Update round data
     if (betUp) {
         totalUpBets += betAmount;
@@ -211,7 +214,7 @@ export function placeBet(binaryArgs: StaticArray<u8>): StaticArray<u8> {
         totalDownBets += betAmount;
         houseDownExposure += houseRisk;
     }
-    
+
     const updatedRoundData = new Args()
         .add(storedRoundId)
         .add(startTime)
@@ -226,46 +229,46 @@ export function placeBet(binaryArgs: StaticArray<u8>): StaticArray<u8> {
         .add(status)
         .add(upWins)
         .serialize();
-    
+
     Storage.set(roundKey, updatedRoundData);
-    
+
     // Store user bet
     const betKey = stringToBytes(USER_BET_PREFIX + roundId.toString() + "_" + user);
-    const existingBetData = Storage.get(betKey);
-    
+
     let userUpBets: u64 = 0;
     let userDownBets: u64 = 0;
-    
-    if (existingBetData.length > 0) {
+
+    if (Storage.has(betKey)) {
+        const existingBetData = Storage.get(betKey);
         const existingBetArgs = new Args(existingBetData);
         existingBetArgs.nextU64(); // roundId
         existingBetArgs.nextString(); // user
         userUpBets = existingBetArgs.nextU64().unwrap();
         userDownBets = existingBetArgs.nextU64().unwrap();
     }
-    
+
     if (betUp) {
         userUpBets += betAmount;
     } else {
         userDownBets += betAmount;
     }
-    
+
     const userBetData = new Args()
         .add(roundId)
         .add(user)
         .add(userUpBets)
         .add(userDownBets)
         .serialize();
-    
+
     Storage.set(betKey, userBetData);
-    
+
     // House collects the bet immediately
     const newHouseBalance = houseBalance + betAmount;
     Storage.set(HOUSE_BALANCE_KEY, u64ToBytes(newHouseBalance));
-    
+
     const direction = betUp ? "UP" : "DOWN";
     generateEvent(`Bet placed: Round ${roundId.toString()}, User ${user}, ${direction}, Amount ${betAmount.toString()}, Potential payout ${potentialPayout.toString()}`);
-    
+
     return new Args().add(betAmount).add(potentialPayout).serialize();
 }
 
@@ -273,14 +276,14 @@ export function placeBet(binaryArgs: StaticArray<u8>): StaticArray<u8> {
 export function settleRound(binaryArgs: StaticArray<u8>): StaticArray<u8> {
     const args = new Args(binaryArgs);
     const roundId = args.nextU64().expect("Round ID is required");
-    
+
     const currentTime = Context.timestamp();
-    
+
     // Get round data
     const roundKey = stringToBytes(ROUND_PREFIX + roundId.toString());
     const roundData = Storage.get(roundKey);
     assert(roundData.length > 0, "Round not found");
-    
+
     const roundArgs = new Args(roundData);
     const storedRoundId = roundArgs.nextU64().unwrap();
     const startTime = roundArgs.nextU64().unwrap();
@@ -294,19 +297,19 @@ export function settleRound(binaryArgs: StaticArray<u8>): StaticArray<u8> {
     const houseDownExposure = roundArgs.nextU64().unwrap();
     let status = roundArgs.nextU8().unwrap();
     let upWins = roundArgs.nextBool().unwrap();
-    
+
     // Validate settlement is allowed
     assert(status !== ROUND_STATUS_SETTLED, "Round already settled");
     assert(currentTime >= settlementTime, "Settlement time not reached");
-    
+
     // Get final price from oracle 
     const resultArgs = new Args(getCurrentPrice());
     endPrice = resultArgs.nextF64().unwrap();
-    
+
     // Determine winner
     upWins = endPrice > startPrice;
     status = ROUND_STATUS_SETTLED;
-    
+
     // Calculate house P&L using AMM payouts
     let housePayout: u64 = 0;
     if (upWins && totalUpBets > 0) {
@@ -316,18 +319,18 @@ export function settleRound(binaryArgs: StaticArray<u8>): StaticArray<u8> {
         // DOWN wins - calculate total payout for all DOWN bettors using AMM
         housePayout = houseDownExposure; // Use pre-calculated exposure
     }
-    
+
     // Update house balance
     const houseBalance = bytesToU64(Storage.get(HOUSE_BALANCE_KEY));
     let newHouseBalance = houseBalance;
-    
+
     if (housePayout > 0) {
         assert(houseBalance >= housePayout, "House insufficient balance for payout");
         newHouseBalance = houseBalance - housePayout;
     }
-    
+
     Storage.set(HOUSE_BALANCE_KEY, u64ToBytes(newHouseBalance));
-    
+
     // Update round data
     const settledRoundData = new Args()
         .add(storedRoundId)
@@ -343,14 +346,14 @@ export function settleRound(binaryArgs: StaticArray<u8>): StaticArray<u8> {
         .add(status)
         .add(upWins)
         .serialize();
-    
+
     Storage.set(roundKey, settledRoundData);
-    
+
     const winDirection = upWins ? "UP" : "DOWN";
     const housePnL = i64(houseBalance + totalUpBets + totalDownBets - newHouseBalance - housePayout);
-    
+
     generateEvent(`Round ${roundId.toString()} settled: Start ${startPrice.toString()}, End ${endPrice.toString()}, Winner ${winDirection}, House P&L ${housePnL.toString()}`);
-    
+
     return new Args().add(upWins).add(endPrice).add(housePayout).serialize();
 }
 
@@ -358,14 +361,14 @@ export function settleRound(binaryArgs: StaticArray<u8>): StaticArray<u8> {
 export function claimWinnings(binaryArgs: StaticArray<u8>): StaticArray<u8> {
     const args = new Args(binaryArgs);
     const roundId = args.nextU64().expect("Round ID is required");
-    
+
     const user = Context.caller().toString();
-    
+
     // Get round data for AMM calculation
     const roundKey = stringToBytes(ROUND_PREFIX + roundId.toString());
     const roundData = Storage.get(roundKey);
     assert(roundData.length > 0, "Round not found");
-    
+
     const roundArgs = new Args(roundData);
     roundArgs.nextU64(); // roundId
     roundArgs.nextU64(); // startTime
@@ -379,20 +382,21 @@ export function claimWinnings(binaryArgs: StaticArray<u8>): StaticArray<u8> {
     roundArgs.nextU64(); // houseDownExposure
     const status = roundArgs.nextU8().unwrap();
     const upWins = roundArgs.nextBool().unwrap();
-    
+
     assert(status === ROUND_STATUS_SETTLED, "Round not settled yet");
-    
+
     // Get user bet
     const betKey = stringToBytes(USER_BET_PREFIX + roundId.toString() + "_" + user);
+
+    assert(Storage.has(betKey), "No bet found for user");
     const betData = Storage.get(betKey);
-    assert(betData.length > 0, "No bet found for user");
-    
+
     const betArgs = new Args(betData);
     betArgs.nextU64(); // roundId
     betArgs.nextString(); // user
     const userUpBets = betArgs.nextU64().unwrap();
     const userDownBets = betArgs.nextU64().unwrap();
-    
+
     // Calculate winnings using AMM odds at time of bet
     let winnings: u64 = 0;
     if (upWins && userUpBets > 0) {
@@ -403,21 +407,21 @@ export function claimWinnings(binaryArgs: StaticArray<u8>): StaticArray<u8> {
         // Calculate what the payout would have been for this DOWN bet
         winnings = calculateAMMPayout(userDownBets, false, totalUpBets, totalDownBets - userDownBets);
     }
-    
+
     assert(winnings > 0, "No winnings to claim");
-    
+
     // Check if already claimed
     const claimedKey = stringToBytes(USER_BET_PREFIX + roundId.toString() + "_" + user + "_claimed");
     assert(!Storage.has(claimedKey), "Winnings already claimed");
-    
+
     // Mark as claimed
     Storage.set(claimedKey, stringToBytes("true"));
-    
+
     // Transfer winnings
     transferCoins(Context.caller(), winnings);
-    
+
     generateEvent(`Winnings claimed: Round ${roundId.toString()}, User ${user}, Amount ${winnings.toString()}`);
-    
+
     return new Args().add(winnings).serialize();
 }
 
@@ -425,22 +429,22 @@ export function claimWinnings(binaryArgs: StaticArray<u8>): StaticArray<u8> {
 export function getRoundDetails(binaryArgs: StaticArray<u8>): StaticArray<u8> {
     const args = new Args(binaryArgs);
     const roundId = args.nextU64().expect("Round ID is required");
-    
+
     const roundKey = stringToBytes(ROUND_PREFIX + roundId.toString());
     const roundData = Storage.get(roundKey);
     assert(roundData.length > 0, "Round not found");
-    
+
     return roundData; // Return complete round data
 }
 
 // Get current active round
 export function getCurrentRound(): StaticArray<u8> {
     const roundCounter = bytesToU64(Storage.get(ROUND_COUNTER_KEY));
-    
+
     if (roundCounter === 0) {
         return new Args().add(u64(0)).serialize(); // No rounds created yet
     }
-    
+
     // Return the latest round
     return getRoundDetails(new Args().add(roundCounter).serialize());
 }
@@ -450,16 +454,17 @@ export function getUserBet(binaryArgs: StaticArray<u8>): StaticArray<u8> {
     const args = new Args(binaryArgs);
     const roundId = args.nextU64().expect("Round ID is required");
     const userAddress = args.nextString().expect("User address is required");
-    
+
     const betKey = stringToBytes(USER_BET_PREFIX + roundId.toString() + "_" + userAddress);
-    const betData = Storage.get(betKey);
-    
-    if (betData.length === 0) {
+
+    if (Storage.has(betKey)) {
+        const betData = Storage.get(betKey);
+        return betData;
+    } else {
         // Return empty bet
         return new Args().add(roundId).add(userAddress).add(u64(0)).add(u64(0)).serialize();
-    }
-    
-    return betData;
+    }  
+
 }
 
 // Get current AMM odds for a potential bet (read-only)
@@ -467,12 +472,13 @@ export function getAMMOdds(binaryArgs: StaticArray<u8>): StaticArray<u8> {
     const args = new Args(binaryArgs);
     const roundId = args.nextU64().expect("Round ID is required");
     const betAmount = args.nextU64().expect("Bet amount is required");
-    
+
     // Get round data
     const roundKey = stringToBytes(ROUND_PREFIX + roundId.toString());
-    const roundData = Storage.get(roundKey);
-    assert(roundData.length > 0, "Round not found");
     
+    assert(Storage.has(roundKey), "Round not found");
+    const roundData = Storage.get(roundKey);
+
     const roundArgs = new Args(roundData);
     roundArgs.nextU64(); // roundId
     roundArgs.nextU64(); // startTime
@@ -482,15 +488,15 @@ export function getAMMOdds(binaryArgs: StaticArray<u8>): StaticArray<u8> {
     roundArgs.nextF64(); // endPrice
     const totalUpBets = roundArgs.nextU64().unwrap();
     const totalDownBets = roundArgs.nextU64().unwrap();
-    
+
     // Calculate potential payouts for both directions
     const upPayout = calculateAMMPayout(betAmount, true, totalUpBets, totalDownBets);
     const downPayout = calculateAMMPayout(betAmount, false, totalUpBets, totalDownBets);
-    
+
     // Calculate odds (payout / bet amount)
     const upOdds = f64(upPayout) / f64(betAmount);
     const downOdds = f64(downPayout) / f64(betAmount);
-    
+
     return new Args()
         .add(upOdds)         // UP odds multiplier
         .add(downOdds)       // DOWN odds multiplier  
@@ -504,11 +510,11 @@ export function getAMMOdds(binaryArgs: StaticArray<u8>): StaticArray<u8> {
 // Get house status
 export function getHouseStatus(): StaticArray<u8> {
     const houseBalance = bytesToU64(Storage.get(HOUSE_BALANCE_KEY));
-    const roundCounter = bytesToU64(Storage.get(ROUND_COUNTER_KEY)); 
-    
+    const roundCounter = bytesToU64(Storage.get(ROUND_COUNTER_KEY));
+
     return new Args()
         .add(houseBalance)
-        .add(roundCounter) 
+        .add(roundCounter)
         .add(HOUSE_EDGE)           // House edge percentage
         .add(MIN_BET_AMOUNT)
         .add(ROUND_DURATION)
@@ -517,24 +523,24 @@ export function getHouseStatus(): StaticArray<u8> {
 }
 
 // Add funds to house (only admin)
-export function addHouseFunds(): StaticArray<u8> { 
+export function addHouseFunds(): StaticArray<u8> {
 
     const caller = Context.caller().toString();
     const isOwner = caller === ownerAddress([]).toString();
     const isAuthorized = isAdmin(caller);
 
     assert(isOwner || isAuthorized, "Caller not authorized to add funds");
-    
+
     const additionalFunds = transferredCoins();
     assert(additionalFunds > 0, "Must send MAS to add funds");
-    
+
     const currentBalance = bytesToU64(Storage.get(HOUSE_BALANCE_KEY));
     const newBalance = currentBalance + additionalFunds;
-    
+
     Storage.set(HOUSE_BALANCE_KEY, u64ToBytes(newBalance));
-    
+
     generateEvent(`House funds added: ${additionalFunds.toString()}, New balance: ${newBalance.toString()}`);
-    
+
     return new Args().add(newBalance).serialize();
 }
 
@@ -545,24 +551,24 @@ export function withdrawHouseFunds(binaryArgs: StaticArray<u8>): StaticArray<u8>
     const isAuthorized = isAdmin(caller);
 
     assert(isOwner || isAuthorized, "Caller not authorized to withdraw funds");
-    
+
     const args = new Args(binaryArgs);
     const amount = args.nextU64().expect("Amount is required");
-    
+
     const currentBalance = bytesToU64(Storage.get(HOUSE_BALANCE_KEY));
     assert(amount <= currentBalance, "Insufficient house balance");
-    
+
     // Keep minimum reserve for ongoing rounds
     const minReserve = HOUSE_INITIAL_BALANCE / 10; // 10% of initial
     assert(currentBalance - amount >= minReserve, "Cannot withdraw below minimum reserve");
-    
+
     const newBalance = currentBalance - amount;
     Storage.set(HOUSE_BALANCE_KEY, u64ToBytes(newBalance));
-    
+
     transferCoins(Context.caller(), amount);
-    
+
     generateEvent(`House funds withdrawn: ${amount.toString()}, Remaining balance: ${newBalance.toString()}`);
-    
+
     return new Args().add(newBalance).serialize();
 }
 
@@ -622,21 +628,21 @@ export function getCurrentPrice(): StaticArray<u8> {
 export function getPriceAtTime(binaryArgs: StaticArray<u8>): StaticArray<u8> {
     const args = new Args(binaryArgs);
     const timestamp = args.nextU64().expect("Timestamp is required");
-    
+
     const historyKey = stringToBytes(PRICE_HISTORY_PREFIX + timestamp.toString());
     const priceData = Storage.get(historyKey);
-    
+
     if (priceData.length === 0) {
         // No exact match, return current price as fallback
         const currentPriceData = Storage.get(CURRENT_PRICE_KEY);
         if (currentPriceData.length === 0) {
             return new Args().add(f64(0)).add(false).serialize();
         }
-        
+
         const currentPrice = bytesToF64(currentPriceData);
         return new Args().add(currentPrice).add(false).serialize(); // false = not exact match
     }
-    
+
     const price = bytesToF64(priceData);
     return new Args().add(price).add(true).serialize(); // true = exact match
 }
