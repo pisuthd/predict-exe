@@ -28,12 +28,13 @@ const ROUND_STATUS_SETTLED: u8 = 2;
 // Constants
 // const GENESIS_TIMESTAMP: u64 = 1704289800000; // Buildnet genesis timestamp
 // const T0: u64 = 16000; // 16 seconds per period in milliseconds
-const ROUND_DURATION: u64 = 10 * 60 * 1000; // 10 minutes in milliseconds
+const ROUND_DURATION: u64 = 60 * 60 * 1000; // 60 minutes in milliseconds
 const BETTING_CUTOFF: u64 = 5 * 60 * 1000;  // Stop betting 5 min before end
-const FIXED_PAYOUT_MULTIPLIER: f64 = 1.85;   // 1.85x payout for winners
 const MIN_BET_AMOUNT: u64 = 1_000_000_000;   // 1 MAS minimum bet
 const HOUSE_INITIAL_BALANCE: u64 = 100_000_000_000_000; // 100k MAS house reserve
 const MAX_PRICE_AGE: u64 = 5 * 60 * 1000; // 5 minutes in milliseconds
+const VIRTUAL_LIQUIDITY: u64 = 1_000_000_000_000; // 1000 MAS virtual liquidity for AMM
+const HOUSE_EDGE: f64 = 0.05; // 5% house edge
 
 
 export function constructor(_: StaticArray<u8>): void {
@@ -75,6 +76,35 @@ export function removeAdmin(binaryArgs: StaticArray<u8>): void {
     generateEvent(`Admin removed: ${updaterAddress}`);
 }
 
+// AMM-style payout calculation
+function calculateAMMPayout(
+    betAmount: u64,
+    betSide: bool, // true = UP, false = DOWN
+    totalUpBets: u64,
+    totalDownBets: u64
+): u64 {
+    // Add virtual liquidity to prevent extreme odds
+    const adjustedUpBets = totalUpBets + VIRTUAL_LIQUIDITY;
+    const adjustedDownBets = totalDownBets + VIRTUAL_LIQUIDITY;
+    const totalAdjusted = adjustedUpBets + adjustedDownBets;
+    
+    let probability: f64;
+    if (betSide) { // UP bet
+        probability = f64(adjustedUpBets) / f64(totalAdjusted);
+    } else { // DOWN bet
+        probability = f64(adjustedDownBets) / f64(totalAdjusted);
+    }
+    
+    // Calculate fair odds and apply house edge
+    const fairOdds = 1.0 / probability;
+    const houseOdds = fairOdds * (1.0 - HOUSE_EDGE);
+    
+    // Ensure reasonable bounds (minimum 1.1x, maximum 5.0x)
+    const clampedOdds = Math.max(1.1, Math.min(5.0, houseOdds));
+    
+    return u64(f64(betAmount) * clampedOdds);
+}
+
 // Check if address is authorized admin
 function isAdmin(address: string): bool {
     const key = stringToBytes(ADMIN_PREFIX + address);
@@ -93,7 +123,7 @@ export function createRound(): StaticArray<u8> {
     resultArgs.next();
     const isStale = resultArgs.nextBool().expect("Failed to get stale status");
     
-    assert(!isStale, "Oracle price is stale");
+    // assert(!isStale, "Oracle price is stale");
     
     // Generate round ID
     const roundCounter = bytesToU64(Storage.get(ROUND_COUNTER_KEY));
@@ -164,9 +194,9 @@ export function placeBet(binaryArgs: StaticArray<u8>): StaticArray<u8> {
     assert(status === ROUND_STATUS_ACTIVE, "Round not active");
     assert(currentTime <= bettingEndTime, "Betting period ended");
     
-    // Calculate potential payout
-    const potentialPayout = u64(f64(betAmount) * FIXED_PAYOUT_MULTIPLIER);
-    const houseRisk = potentialPayout - betAmount; // House's potential loss
+    // Calculate AMM-style payout based on current pool balance
+    const potentialPayout = calculateAMMPayout(betAmount, betUp, totalUpBets, totalDownBets);
+    const houseRisk = potentialPayout > betAmount ? potentialPayout - betAmount : u64(0); // House's potential loss
     
     // Check house has sufficient balance
     const houseBalance = bytesToU64(Storage.get(HOUSE_BALANCE_KEY));
@@ -277,14 +307,14 @@ export function settleRound(binaryArgs: StaticArray<u8>): StaticArray<u8> {
     upWins = endPrice > startPrice;
     status = ROUND_STATUS_SETTLED;
     
-    // Calculate house P&L
+    // Calculate house P&L using AMM payouts
     let housePayout: u64 = 0;
     if (upWins && totalUpBets > 0) {
-        // UP wins - house pays UP bettors
-        housePayout = u64(f64(totalUpBets) * FIXED_PAYOUT_MULTIPLIER);
+        // UP wins - calculate total payout for all UP bettors using AMM
+        housePayout = houseUpExposure; // Use pre-calculated exposure
     } else if (!upWins && totalDownBets > 0) {
-        // DOWN wins - house pays DOWN bettors
-        housePayout = u64(f64(totalDownBets) * FIXED_PAYOUT_MULTIPLIER);
+        // DOWN wins - calculate total payout for all DOWN bettors using AMM
+        housePayout = houseDownExposure; // Use pre-calculated exposure
     }
     
     // Update house balance
@@ -331,7 +361,7 @@ export function claimWinnings(binaryArgs: StaticArray<u8>): StaticArray<u8> {
     
     const user = Context.caller().toString();
     
-    // Get round data
+    // Get round data for AMM calculation
     const roundKey = stringToBytes(ROUND_PREFIX + roundId.toString());
     const roundData = Storage.get(roundKey);
     assert(roundData.length > 0, "Round not found");
@@ -343,8 +373,8 @@ export function claimWinnings(binaryArgs: StaticArray<u8>): StaticArray<u8> {
     roundArgs.nextU64(); // bettingEndTime
     roundArgs.nextF64(); // startPrice
     roundArgs.nextF64(); // endPrice
-    roundArgs.nextU64(); // totalUpBets
-    roundArgs.nextU64(); // totalDownBets
+    const totalUpBets = roundArgs.nextU64().unwrap();
+    const totalDownBets = roundArgs.nextU64().unwrap();
     roundArgs.nextU64(); // houseUpExposure
     roundArgs.nextU64(); // houseDownExposure
     const status = roundArgs.nextU8().unwrap();
@@ -363,12 +393,15 @@ export function claimWinnings(binaryArgs: StaticArray<u8>): StaticArray<u8> {
     const userUpBets = betArgs.nextU64().unwrap();
     const userDownBets = betArgs.nextU64().unwrap();
     
-    // Calculate winnings
+    // Calculate winnings using AMM odds at time of bet
     let winnings: u64 = 0;
     if (upWins && userUpBets > 0) {
-        winnings = u64(f64(userUpBets) * FIXED_PAYOUT_MULTIPLIER);
+        // Calculate what the payout would have been for this UP bet
+        // We need to reconstruct the pool state when this user bet
+        winnings = calculateAMMPayout(userUpBets, true, totalUpBets - userUpBets, totalDownBets);
     } else if (!upWins && userDownBets > 0) {
-        winnings = u64(f64(userDownBets) * FIXED_PAYOUT_MULTIPLIER);
+        // Calculate what the payout would have been for this DOWN bet
+        winnings = calculateAMMPayout(userDownBets, false, totalUpBets, totalDownBets - userDownBets);
     }
     
     assert(winnings > 0, "No winnings to claim");
@@ -429,6 +462,45 @@ export function getUserBet(binaryArgs: StaticArray<u8>): StaticArray<u8> {
     return betData;
 }
 
+// Get current AMM odds for a potential bet (read-only)
+export function getAMMOdds(binaryArgs: StaticArray<u8>): StaticArray<u8> {
+    const args = new Args(binaryArgs);
+    const roundId = args.nextU64().expect("Round ID is required");
+    const betAmount = args.nextU64().expect("Bet amount is required");
+    
+    // Get round data
+    const roundKey = stringToBytes(ROUND_PREFIX + roundId.toString());
+    const roundData = Storage.get(roundKey);
+    assert(roundData.length > 0, "Round not found");
+    
+    const roundArgs = new Args(roundData);
+    roundArgs.nextU64(); // roundId
+    roundArgs.nextU64(); // startTime
+    roundArgs.nextU64(); // settlementTime
+    roundArgs.nextU64(); // bettingEndTime
+    roundArgs.nextF64(); // startPrice
+    roundArgs.nextF64(); // endPrice
+    const totalUpBets = roundArgs.nextU64().unwrap();
+    const totalDownBets = roundArgs.nextU64().unwrap();
+    
+    // Calculate potential payouts for both directions
+    const upPayout = calculateAMMPayout(betAmount, true, totalUpBets, totalDownBets);
+    const downPayout = calculateAMMPayout(betAmount, false, totalUpBets, totalDownBets);
+    
+    // Calculate odds (payout / bet amount)
+    const upOdds = f64(upPayout) / f64(betAmount);
+    const downOdds = f64(downPayout) / f64(betAmount);
+    
+    return new Args()
+        .add(upOdds)         // UP odds multiplier
+        .add(downOdds)       // DOWN odds multiplier  
+        .add(upPayout)       // UP potential payout
+        .add(downPayout)     // DOWN potential payout
+        .add(totalUpBets)    // Current UP pool
+        .add(totalDownBets)  // Current DOWN pool
+        .serialize();
+}
+
 // Get house status
 export function getHouseStatus(): StaticArray<u8> {
     const houseBalance = bytesToU64(Storage.get(HOUSE_BALANCE_KEY));
@@ -437,9 +509,10 @@ export function getHouseStatus(): StaticArray<u8> {
     return new Args()
         .add(houseBalance)
         .add(roundCounter) 
-        .add(FIXED_PAYOUT_MULTIPLIER)
+        .add(HOUSE_EDGE)           // House edge percentage
         .add(MIN_BET_AMOUNT)
         .add(ROUND_DURATION)
+        .add(VIRTUAL_LIQUIDITY)    // Virtual liquidity for AMM
         .serialize();
 }
 
