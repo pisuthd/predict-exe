@@ -2,12 +2,11 @@
 
 import React, { useState, useEffect } from 'react';
 import { TrendingUp, TrendingDown, Clock, Bitcoin, Wallet, Trophy, History, Terminal, Zap, Activity } from 'lucide-react';
-
+import BTCPrice from './BTCPrice';
 
 const MainPanel = () => {
 
-    const [timeLeft, setTimeLeft] = useState(3420);
-    const [btcPrice, setBtcPrice] = useState(43250.50);
+    const [timeLeft, setTimeLeft] = useState(3420); 
     const [selectedBet, setSelectedBet] = useState<any>(null);
     const [betAmount, setBetAmount] = useState('');
     const [terminalText, setTerminalText] = useState('SYSTEM READY...');
@@ -56,20 +55,13 @@ const MainPanel = () => {
                             <div className="w-3 h-3 bg-red-500"></div>
                             <div className="w-3 h-3 bg-yellow-500"></div>
                             <div className="w-3 h-3 bg-green-500"></div>
-                            <span className="text-cyan-500 ml-4 font-bold">PREDICTION_TERMINAL.EXE</span>
+                            <span className="text-cyan-500 ml-4 font-bold">TERMINAL.EXE</span>
                         </div>
                         <div className="text-cyan-500 text-sm">ROUND #1247</div>
                     </div>
                     <div className="border-t border-cyan-500/50 pt-2">
                         <div className="flex items-center justify-between">
-                            <div className="flex items-center space-x-4">
-                                <Bitcoin className="w-6 h-6 text-orange-500" />
-                                <div>
-                                    <span className="text-gray-400 text-sm">BTC/USD:</span>
-                                    <span className="text-white font-bold text-xl ml-2">${btcPrice.toLocaleString()}</span>
-                                    <span className="text-green-500 ml-2 text-sm">▲ +2.3%</span>
-                                </div>
-                            </div>
+                            <BTCPrice/>
                             <div className="text-right">
                                 <p className="text-gray-400 text-sm">NEXT EXECUTION:</p>
                                 <p className="text-cyan-500 font-bold text-2xl font-mono">{formatTime(timeLeft)}</p>
@@ -102,8 +94,8 @@ const MainPanel = () => {
                                 <button
                                     onClick={() => setSelectedBet('up')}
                                     className={`relative group border-2 p-8 transition-all ${selectedBet === 'up'
-                                            ? 'border-green-500 bg-green-500/20'
-                                            : 'border-green-500/50 hover:border-green-500 hover:bg-green-500/10'
+                                        ? 'border-green-500 bg-green-500/20'
+                                        : 'border-green-500/50 hover:border-green-500 hover:bg-green-500/10'
                                         }`}
                                 >
                                     <div className="text-center">
@@ -128,8 +120,8 @@ const MainPanel = () => {
                                 <button
                                     onClick={() => setSelectedBet('down')}
                                     className={`relative group border-2 p-8 transition-all ${selectedBet === 'down'
-                                            ? 'border-red-500 bg-red-500/20'
-                                            : 'border-red-500/50 hover:border-red-500 hover:bg-red-500/10'
+                                        ? 'border-red-500 bg-red-500/20'
+                                        : 'border-red-500/50 hover:border-red-500 hover:bg-red-500/10'
                                         }`}
                                 >
                                     <div className="text-center">
@@ -187,8 +179,8 @@ const MainPanel = () => {
 
                                     <button
                                         className={`w-full py-4 border-2 font-bold text-lg tracking-wider transition-all ${selectedBet === 'up'
-                                                ? 'border-green-500 bg-green-500/20 text-green-500 hover:bg-green-500/30'
-                                                : 'border-red-500 bg-red-500/20 text-red-500 hover:bg-red-500/30'
+                                            ? 'border-green-500 bg-green-500/20 text-green-500 hover:bg-green-500/30'
+                                            : 'border-red-500 bg-red-500/20 text-red-500 hover:bg-red-500/30'
                                             }`}
                                     >
                                         EXECUTE {selectedBet?.toUpperCase()} PREDICTION
