@@ -2,635 +2,569 @@ import {
     Context, generateEvent, Storage, transferredCoins, transferCoins, balance, asyncCall,
     Slot
 } from '@massalabs/massa-as-sdk';
-import { Args, u64ToBytes, stringToBytes, bytesToU64 } from '@massalabs/as-types';
+import { Args, bytesToF64, u64ToBytes, stringToBytes, bytesToU64, f64ToBytes } from '@massalabs/as-types';
 import {
     ownerAddress,
     setOwner,
+    onlyOwner
 } from '@massalabs/sc-standards/assembly/contracts/utils/ownership';
 
+// Storage keys
+const ROUND_COUNTER_KEY = stringToBytes('ROUND_COUNTER');
+const ROUND_PREFIX = 'ROUND_';
+const USER_BET_PREFIX = 'USER_BET_';
+const HOUSE_BALANCE_KEY = stringToBytes('HOUSE_BALANCE');
+const CURRENT_PRICE_KEY = stringToBytes('CURRENT_PRICE');
+const LAST_UPDATE_KEY = stringToBytes('LAST_UPDATE_TIME');
+const PRICE_HISTORY_PREFIX = 'PRICE_HISTORY_';
+const ADMIN_PREFIX = 'ADMIN_';
+
+// Round status enum
+const ROUND_STATUS_ACTIVE: u8 = 0;
+// const ROUND_STATUS_BETTING_CLOSED: u8 = 1;
+const ROUND_STATUS_SETTLED: u8 = 2;
+// const ROUND_STATUS_CANCELLED: u8 = 3;
+
 // Constants
-const ID_COUNTER_KEY = stringToBytes('M');
-const ASYNC_CALL_GAS: u64 = 2100_000;
-const ASYNC_CALL_FEE: u64 = 1;
-// const GENESIS_TIMESTAMP: u64 = 1705312800000; // Massa genesis timestamp
-const GENESIS_TIMESTAMP: u64 = 1704289800000; // Buildnet genesis timestamp
-const T0: u64 = 16000; // 16 seconds per period in milliseconds
+// const GENESIS_TIMESTAMP: u64 = 1704289800000; // Buildnet genesis timestamp
+// const T0: u64 = 16000; // 16 seconds per period in milliseconds
+const ROUND_DURATION: u64 = 10 * 60 * 1000; // 10 minutes in milliseconds
+const BETTING_CUTOFF: u64 = 5 * 60 * 1000;  // Stop betting 5 min before end
+const FIXED_PAYOUT_MULTIPLIER: f64 = 1.85;   // 1.85x payout for winners
+const MIN_BET_AMOUNT: u64 = 1_000_000_000;   // 1 MAS minimum bet
+const HOUSE_INITIAL_BALANCE: u64 = 100_000_000_000_000; // 100k MAS house reserve
+const MAX_PRICE_AGE: u64 = 5 * 60 * 1000; // 5 minutes in milliseconds
+
 
 export function constructor(_: StaticArray<u8>): void {
     if (!Context.isDeployingContract()) return;
     setOwner(new Args().add(Context.caller()).serialize());
-    Storage.set(ID_COUNTER_KEY, u64ToBytes(0));
+
+    const initialPrice: f64 = 109749.34;
+    const currentTime = Context.timestamp();
+
+    Storage.set(CURRENT_PRICE_KEY, f64ToBytes(initialPrice));
+    Storage.set(LAST_UPDATE_KEY, u64ToBytes(currentTime));
+
+    generateEvent(`Oracle initialized with price: ${initialPrice.toString()}`);
+}
+
+// Add admin (only owner can call)
+export function addAdmin(binaryArgs: StaticArray<u8>): void {
+    onlyOwner();
+
+    const args = new Args(binaryArgs);
+    const updaterAddress = args.nextString().expect("Admin address is required");
+
+    const key = stringToBytes(ADMIN_PREFIX + updaterAddress);
+    Storage.set(key, stringToBytes("true"));
+
+    generateEvent(`Admin added: ${updaterAddress}`);
+}
+
+// Remove admin (only owner can call)
+export function removeAdmin(binaryArgs: StaticArray<u8>): void {
+    onlyOwner();
+
+    const args = new Args(binaryArgs);
+    const updaterAddress = args.nextString().expect("Admin address is required");
+
+    const key = stringToBytes(ADMIN_PREFIX + updaterAddress);
+    Storage.del(key);
+
+    generateEvent(`Admin removed: ${updaterAddress}`);
+}
+
+// Check if address is authorized admin
+function isAdmin(address: string): bool {
+    const key = stringToBytes(ADMIN_PREFIX + address);
+    return Storage.has(key);
 }
 
 
-export function createMarket(binaryArgs: StaticArray<u8>): StaticArray<u8> {
-    const args = new Args(binaryArgs);
-
-    const asset = args.nextString().expect("Asset is required");
-    const direction = args.nextBool().expect("Direction is required"); // true = "reach", false = "drop"
-    const targetPrice = args.nextF64().expect("Target price is required");
-    const currentPrice = args.nextF64().expect("Current price is required");
-    const expirationTimestamp = args.nextU64().expect("Expiration period is required");
-    const dataSource = args.nextString().expect("Data source is required");
-    const creatorPosition = args.nextBool().expect("Creator position is required"); // true = "YES", false = "NO"
-
-    // Get transferred MAS amount
-    const creatorStake = transferredCoins();
-    assert(creatorStake >= 1000000000, "Minimum stake is 1 MAS"); // 1 MAS = 10^9 smallest units
-
-    // Validation
-    const currentTimestamp = Context.timestamp();
-    assert(expirationTimestamp > currentTimestamp, "Expiration must be in the future");
-    assert(expirationTimestamp <= currentTimestamp + (30 * 24 * 60 * 60 * 1000), "Expiration cannot be more than 1 month from now");
-
-    // Validate direction logic
-    if (direction) { // direction === true (reach)
-        assert(currentPrice < targetPrice, "For 'reach' prediction, current price must be below target");
-    } else { // direction === false (drop)
-        assert(currentPrice > targetPrice, "For 'drop' prediction, current price must be above target");
-    }
-
-    // Generate market ID
-    const marketCounter = bytesToU64(Storage.get(ID_COUNTER_KEY));
-    const newMarketCounter = marketCounter + 1;
-    const marketId = `market_${newMarketCounter.toString()}`;
-
-    // Create initial position pools
-    let yesPool: u64 = 0;
-    let noPool: u64 = 0;
-
-    if (creatorPosition) { // creatorPosition === true (YES)
-        yesPool = creatorStake;
-    } else { // creatorPosition === false (NO)
-        noPool = creatorStake;
-    }
-
-    // Store market data
-    const marketData = new Args();
-    marketData.add(Context.caller()); // creator/owner
-    marketData.add(asset); // asset name
-    marketData.add(direction); // true = "reach", false = "drop"
-    marketData.add(targetPrice); // target price
-    marketData.add(currentPrice); // reference price at creation
-    marketData.add(expirationTimestamp); // when prediction ends
-    marketData.add(currentTimestamp); // when market was created
-    marketData.add(dataSource); // oracle source identifier
-    marketData.add(yesPool); // YES token pool
-    marketData.add(noPool); // NO token pool
-    marketData.add(false); // resolved flag
-    marketData.add(false); // resolution result (true = YES wins, false = NO wins)
-
-    // Store market
-    Storage.set(stringToBytes(marketId), marketData.serialize());
-    Storage.set(ID_COUNTER_KEY, u64ToBytes(newMarketCounter));
-
-    // Store creator's position
-    const positionKey = `${marketId}_${Context.caller().toString()}`;
-    const positionData = new Args();
-    positionData.add(creatorPosition ? creatorStake : u64(0)); // YES tokens
-    positionData.add(creatorPosition ? u64(0) : creatorStake); // NO tokens
-    Storage.set(stringToBytes(positionKey), positionData.serialize());
-
-    // Generate event
-    const directionStr = direction ? "reach" : "drop";
-    const positionStr = creatorPosition ? "YES" : "NO";
-    const question = `Will ${asset} price ${directionStr} $${targetPrice.toString()} by timestamp ${expirationTimestamp.toString()}?`;
-
-    generateEvent(`Market created: ${marketId}, question: "${question}", creator: ${Context.caller().toString()}, position: ${positionStr}, stake: ${creatorStake.toString()}, source: ${dataSource}`);
-
-    // Schedule automatic resolution
-    const expirationPeriod = timestampToPeriod(expirationTimestamp);
-    const currentThread = Context.currentThread();
-
-    // Schedule resolution for 10 period after expiration to ensure market has expired
-    const resolutionPeriod = expirationPeriod + 10;
-    const startSlot = new Slot(resolutionPeriod, currentThread);
-    const endSlot = new Slot(resolutionPeriod + 100, currentThread); // 100 period window for resolution
-
-    // Schedule async resolution
-    const asyncArgs = new Args().add(marketId).serialize();
-    asyncCall(
-        Context.callee(),
-        'autoResolveMarket',
-        startSlot,
-        endSlot,
-        ASYNC_CALL_GAS,
-        ASYNC_CALL_FEE,
-        asyncArgs
-    );
-
-    return new Args().add(marketId).serialize();
-}
-
-// Function to resolve a market (anyone can call for now)
-export function resolveMarket(binaryArgs: StaticArray<u8>): StaticArray<u8> {
-    const args = new Args(binaryArgs);
-    const marketId = args.nextString().expect("Market ID is required");
-    const finalPrice = args.nextF64().expect("Final price is required");
-
-    // Get market data
-    const marketData = Storage.get(stringToBytes(marketId));
-    assert(marketData.length > 0, "Market not found");
-
-    const marketArgs = new Args(marketData);
-    const creator = marketArgs.nextString().unwrap();
-    const asset = marketArgs.nextString().unwrap();
-    const direction = marketArgs.nextBool().unwrap();
-    const targetPrice = marketArgs.nextF64().unwrap();
-    const currentPrice = marketArgs.nextF64().unwrap();
-    const expirationPeriod = marketArgs.nextU64().unwrap();
-    const createdPeriod = marketArgs.nextU64().unwrap();
-    const dataSource = marketArgs.nextString().unwrap();
-    const yesPool = marketArgs.nextU64().unwrap();
-    const noPool = marketArgs.nextU64().unwrap();
-    const resolved = marketArgs.nextBool().unwrap();
-    // const resolutionResult = marketArgs.nextBool().unwrap();
-
-    // Validation
-    assert(!resolved, "Market already resolved");
-    assert(Context.timestamp() >= expirationPeriod, "Market has not expired yet");
-
-    // Determine resolution result
-    let yesWins: bool = false;
-    if (direction) { // reach
-        yesWins = finalPrice >= targetPrice;
-    } else { // drop
-        yesWins = finalPrice <= targetPrice;
-    }
-
-    // Update market data with resolution
-    const updatedMarketData = new Args();
-    updatedMarketData.add(creator);
-    updatedMarketData.add(asset);
-    updatedMarketData.add(direction);
-    updatedMarketData.add(targetPrice);
-    updatedMarketData.add(currentPrice);
-    updatedMarketData.add(expirationPeriod);
-    updatedMarketData.add(createdPeriod);
-    updatedMarketData.add(dataSource);
-    updatedMarketData.add(yesPool);
-    updatedMarketData.add(noPool);
-    updatedMarketData.add(true); // resolved = true
-    updatedMarketData.add(yesWins); // resolution result
-
-    Storage.set(stringToBytes(marketId), updatedMarketData.serialize());
-
-    // Generate resolution event
-    const directionStr = direction ? "reach" : "drop";
-    const resultStr = yesWins ? "YES" : "NO";
-    generateEvent(`Market resolved: ${marketId}, final price: ${finalPrice.toString()}, target: ${targetPrice.toString()}, direction: ${directionStr}, winner: ${resultStr}`);
-
-    return new Args().add(yesWins).serialize();
-}
-
-// Function to get all active markets (paginated)
-export function getActiveMarkets(binaryArgs: StaticArray<u8>): StaticArray<u8> {
-    const args = new Args(binaryArgs);
-    const offset = args.nextU64().expect("Offset is required");
-    const limit = args.nextU64().expect("Limit is required");
-
-    assert(limit <= 50, "Limit cannot exceed 50");
-
-    const totalMarkets = bytesToU64(Storage.get(ID_COUNTER_KEY));
-    const currentPeriod = Context.timestamp();
-
-    const activeMarkets = new Args();
-    let count: u64 = 0;
-    let found: u64 = 0;
-
-    for (let i: u64 = 1; i <= totalMarkets && found < limit; i++) {
-        const marketId = `market_${i.toString()}`;
-        const marketData = Storage.get(stringToBytes(marketId));
-
-        if (marketData.length > 0) {
-            const marketArgs = new Args(marketData);
-            marketArgs.nextString(); // creator
-            marketArgs.nextString(); // asset
-            marketArgs.nextBool(); // direction
-            marketArgs.nextF64(); // targetPrice
-            marketArgs.nextF64(); // currentPrice
-            const expirationPeriod = marketArgs.nextU64().unwrap();
-            marketArgs.nextU64(); // createdPeriod
-            marketArgs.nextString(); // dataSource
-            marketArgs.nextU64(); // yesPool
-            marketArgs.nextU64(); // noPool
-            const resolved = marketArgs.nextBool().unwrap();
-
-            // Check if market is active (not resolved and not expired)
-            if (!resolved && expirationPeriod > currentPeriod) {
-                if (count >= offset) {
-                    activeMarkets.add(marketId);
-                    found++;
-                }
-                count++;
-            }
-        }
-    }
-
-    return activeMarkets.add(count).serialize(); // Include total count
-}
-
-// Function to get market details with pools and odds
-export function getMarketDetails(binaryArgs: StaticArray<u8>): StaticArray<u8> {
-    const args = new Args(binaryArgs);
-    const marketId = args.nextString().expect("Market ID is required");
-
-    // Get market data
-    const marketData = Storage.get(stringToBytes(marketId));
-    assert(marketData.length > 0, "Market not found");
-
-    const marketArgs = new Args(marketData);
-    const creator = marketArgs.nextString().unwrap();
-    const asset = marketArgs.nextString().unwrap();
-    const direction = marketArgs.nextBool().unwrap();
-    const targetPrice = marketArgs.nextF64().unwrap();
-    const currentPrice = marketArgs.nextF64().unwrap();
-    const expirationPeriod = marketArgs.nextU64().unwrap();
-    const createdPeriod = marketArgs.nextU64().unwrap();
-    const dataSource = marketArgs.nextString().unwrap();
-    const yesPool = marketArgs.nextU64().unwrap();
-    const noPool = marketArgs.nextU64().unwrap();
-    const resolved = marketArgs.nextBool().unwrap();
-    const resolutionResult = marketArgs.nextBool().unwrap();
-
-    const totalPool = yesPool + noPool;
-    const currentPeriod = Context.timestamp();
-    const isExpired = currentPeriod >= expirationPeriod;
-
-    // Calculate odds
-    let yesOdds: f64 = 0.5;
-    let noOdds: f64 = 0.5;
-
-    if (totalPool > 0) {
-        yesOdds = f64(yesPool) / f64(totalPool);
-        noOdds = f64(noPool) / f64(totalPool);
-    }
-
-    // Return comprehensive market info
-    return new Args()
-        .add(creator)
-        .add(asset)
-        .add(direction)
-        .add(targetPrice)
-        .add(currentPrice)
-        .add(expirationPeriod)
-        .add(createdPeriod)
-        .add(dataSource)
-        .add(yesPool)
-        .add(noPool)
-        .add(totalPool)
-        .add(yesOdds)
-        .add(noOdds)
-        .add(resolved)
-        .add(resolutionResult)
-        .add(isExpired)
+// Create new round
+export function createRound(): StaticArray<u8> {
+    const currentTime = Context.timestamp();
+    
+    // Get current price from oracle
+    const resultArgs = new Args(getCurrentPrice());
+    const startPrice = resultArgs.nextF64().unwrap();
+    resultArgs.next();
+    resultArgs.next();
+    const isStale = resultArgs.nextBool().expect("Failed to get stale status");
+    
+    assert(!isStale, "Oracle price is stale");
+    
+    // Generate round ID
+    const roundCounter = bytesToU64(Storage.get(ROUND_COUNTER_KEY));
+    const newRoundCounter = roundCounter + 1;
+    const roundId = newRoundCounter;
+    
+    const settlementTime = currentTime + ROUND_DURATION;
+    const bettingEndTime = settlementTime - BETTING_CUTOFF;
+    
+    // Create round data
+    const roundData = new Args()
+        .add(roundId)                    // Round ID
+        .add(currentTime)                // Start time
+        .add(settlementTime)             // Settlement time
+        .add(bettingEndTime)             // Betting end time
+        .add(startPrice)                 // Starting BTC price
+        .add(f64(0))                     // End price (will be set at settlement)
+        .add(u64(0))                     // Total UP bets
+        .add(u64(0))                     // Total DOWN bets
+        .add(u64(0))                     // House UP exposure
+        .add(u64(0))                     // House DOWN exposure
+        .add(ROUND_STATUS_ACTIVE)        // Status
+        .add(false)                      // UP wins (will be set at settlement)
         .serialize();
+    
+    // Store round
+    const roundKey = stringToBytes(ROUND_PREFIX + roundId.toString());
+    Storage.set(roundKey, roundData);
+    Storage.set(ROUND_COUNTER_KEY, u64ToBytes(newRoundCounter));
+    
+    generateEvent(`Round ${roundId.toString()} created: Start price ${startPrice.toString()}, Settlement at ${settlementTime.toString()}`);
+    
+    return new Args().add(roundId).serialize();
 }
 
-// Helper function to get user position
-export function getUserPosition(binaryArgs: StaticArray<u8>): StaticArray<u8> {
-    const args = new Args(binaryArgs);
-    const marketId = args.nextString().expect("Market ID is required");
-    const userAddress = args.nextString().expect("User address is required");
-
-    const positionKey = `${marketId}_${userAddress}`;
-    const positionData = Storage.get(stringToBytes(positionKey));
-
-    if (positionData.length === 0) {
-        // Return empty position
-        return new Args().add(u64(0)).add(u64(0)).serialize();
-    }
-
-    return positionData;
-}
-
-
-// Function for users to bet on existing markets
+// Place bet on active round
 export function placeBet(binaryArgs: StaticArray<u8>): StaticArray<u8> {
     const args = new Args(binaryArgs);
-    const marketId = args.nextString().expect("Market ID is required");
-    const betOnYes = args.nextBool().expect("Bet position is required"); // true = YES, false = NO
-
-    // Get transferred MAS amount
+    const roundId = args.nextU64().expect("Round ID is required");
+    const betUp = args.nextBool().expect("Bet direction is required"); // true = UP, false = DOWN
+    
     const betAmount = transferredCoins();
-    assert(betAmount > 0, "Must send MAS to place bet");
-
-    // Get market data
-    const marketData = Storage.get(stringToBytes(marketId));
-    assert(marketData.length > 0, "Market not found");
-
-    const marketArgs = new Args(marketData);
-    const creator = marketArgs.nextString().unwrap();
-    const asset = marketArgs.nextString().unwrap();
-    const direction = marketArgs.nextBool().unwrap();
-    const targetPrice = marketArgs.nextF64().unwrap();
-    const currentPrice = marketArgs.nextF64().unwrap();
-    const expirationPeriod = marketArgs.nextU64().unwrap();
-    const createdPeriod = marketArgs.nextU64().unwrap();
-    const dataSource = marketArgs.nextString().unwrap();
-    let yesPool = marketArgs.nextU64().unwrap();
-    let noPool = marketArgs.nextU64().unwrap();
-    const resolved = marketArgs.nextBool().unwrap();
-    const resolutionResult = marketArgs.nextBool().unwrap();
-
-    // Validation
-    assert(!resolved, "Market already resolved");
-    assert(Context.timestamp() < expirationPeriod, "Market has expired");
-
-    // Update pools
-    if (betOnYes) {
-        yesPool += betAmount;
+    assert(betAmount >= MIN_BET_AMOUNT, "Bet amount below minimum");
+    
+    const user = Context.caller().toString();
+    const currentTime = Context.timestamp();
+    
+    // Get round data
+    const roundKey = stringToBytes(ROUND_PREFIX + roundId.toString());
+    const roundData = Storage.get(roundKey);
+    assert(roundData.length > 0, "Round not found");
+    
+    const roundArgs = new Args(roundData);
+    const storedRoundId = roundArgs.nextU64().unwrap();
+    const startTime = roundArgs.nextU64().unwrap();
+    const settlementTime = roundArgs.nextU64().unwrap();
+    const bettingEndTime = roundArgs.nextU64().unwrap();
+    const startPrice = roundArgs.nextF64().unwrap();
+    const endPrice = roundArgs.nextF64().unwrap();
+    let totalUpBets = roundArgs.nextU64().unwrap();
+    let totalDownBets = roundArgs.nextU64().unwrap();
+    let houseUpExposure = roundArgs.nextU64().unwrap();
+    let houseDownExposure = roundArgs.nextU64().unwrap();
+    const status = roundArgs.nextU8().unwrap();
+    const upWins = roundArgs.nextBool().unwrap();
+    
+    // Validate betting is allowed
+    assert(status === ROUND_STATUS_ACTIVE, "Round not active");
+    assert(currentTime <= bettingEndTime, "Betting period ended");
+    
+    // Calculate potential payout
+    const potentialPayout = u64(f64(betAmount) * FIXED_PAYOUT_MULTIPLIER);
+    const houseRisk = potentialPayout - betAmount; // House's potential loss
+    
+    // Check house has sufficient balance
+    const houseBalance = bytesToU64(Storage.get(HOUSE_BALANCE_KEY));
+    const newHouseExposure = betUp ? houseUpExposure + houseRisk : houseDownExposure + houseRisk;
+    assert(newHouseExposure <= houseBalance, "House insufficient liquidity");
+    
+    // Update round data
+    if (betUp) {
+        totalUpBets += betAmount;
+        houseUpExposure += houseRisk;
     } else {
-        noPool += betAmount;
+        totalDownBets += betAmount;
+        houseDownExposure += houseRisk;
     }
-
-    // Update market data
-    const updatedMarketData = new Args();
-    updatedMarketData.add(creator);
-    updatedMarketData.add(asset);
-    updatedMarketData.add(direction);
-    updatedMarketData.add(targetPrice);
-    updatedMarketData.add(currentPrice);
-    updatedMarketData.add(expirationPeriod);
-    updatedMarketData.add(createdPeriod);
-    updatedMarketData.add(dataSource);
-    updatedMarketData.add(yesPool);
-    updatedMarketData.add(noPool);
-    updatedMarketData.add(resolved);
-    updatedMarketData.add(resolutionResult);
-
-    Storage.set(stringToBytes(marketId), updatedMarketData.serialize());
-
-    // Update user's position
-    const positionKey = `${marketId}_${Context.caller().toString()}`;
-    const existingPosition = Storage.get(stringToBytes(positionKey));
-
-    let userYesTokens: u64 = 0;
-    let userNoTokens: u64 = 0;
-
-    if (existingPosition.length > 0) {
-        const positionArgs = new Args(existingPosition);
-        userYesTokens = positionArgs.nextU64().unwrap();
-        userNoTokens = positionArgs.nextU64().unwrap();
+    
+    const updatedRoundData = new Args()
+        .add(storedRoundId)
+        .add(startTime)
+        .add(settlementTime)
+        .add(bettingEndTime)
+        .add(startPrice)
+        .add(endPrice)
+        .add(totalUpBets)
+        .add(totalDownBets)
+        .add(houseUpExposure)
+        .add(houseDownExposure)
+        .add(status)
+        .add(upWins)
+        .serialize();
+    
+    Storage.set(roundKey, updatedRoundData);
+    
+    // Store user bet
+    const betKey = stringToBytes(USER_BET_PREFIX + roundId.toString() + "_" + user);
+    const existingBetData = Storage.get(betKey);
+    
+    let userUpBets: u64 = 0;
+    let userDownBets: u64 = 0;
+    
+    if (existingBetData.length > 0) {
+        const existingBetArgs = new Args(existingBetData);
+        existingBetArgs.nextU64(); // roundId
+        existingBetArgs.nextString(); // user
+        userUpBets = existingBetArgs.nextU64().unwrap();
+        userDownBets = existingBetArgs.nextU64().unwrap();
     }
-
-    // Add new bet to existing position
-    if (betOnYes) {
-        userYesTokens += betAmount;
+    
+    if (betUp) {
+        userUpBets += betAmount;
     } else {
-        userNoTokens += betAmount;
+        userDownBets += betAmount;
     }
-
-    // Store updated position
-    const positionData = new Args();
-    positionData.add(userYesTokens);
-    positionData.add(userNoTokens);
-    Storage.set(stringToBytes(positionKey), positionData.serialize());
-
-    // Generate event
-    const positionStr = betOnYes ? "YES" : "NO";
-    generateEvent(`Bet placed: ${marketId}, user: ${Context.caller().toString()}, position: ${positionStr}, amount: ${betAmount.toString()}, new pools: YES=${yesPool.toString()}, NO=${noPool.toString()}`);
-
-    return new Args().add(betAmount).serialize();
+    
+    const userBetData = new Args()
+        .add(roundId)
+        .add(user)
+        .add(userUpBets)
+        .add(userDownBets)
+        .serialize();
+    
+    Storage.set(betKey, userBetData);
+    
+    // House collects the bet immediately
+    const newHouseBalance = houseBalance + betAmount;
+    Storage.set(HOUSE_BALANCE_KEY, u64ToBytes(newHouseBalance));
+    
+    const direction = betUp ? "UP" : "DOWN";
+    generateEvent(`Bet placed: Round ${roundId.toString()}, User ${user}, ${direction}, Amount ${betAmount.toString()}, Potential payout ${potentialPayout.toString()}`);
+    
+    return new Args().add(betAmount).add(potentialPayout).serialize();
 }
 
-// Function to get user's positions across all markets
-export function getUserPositions(binaryArgs: StaticArray<u8>): StaticArray<u8> {
+// Settle round (can be called by anyone after settlement time)
+export function settleRound(binaryArgs: StaticArray<u8>): StaticArray<u8> {
     const args = new Args(binaryArgs);
-    const userAddress = args.nextString().expect("User address is required");
-    const offset = args.nextU64().expect("Offset is required");
-    const limit = args.nextU64().expect("Limit is required");
-
-    assert(limit <= 20, "Limit cannot exceed 20");
-
-    const totalMarkets = bytesToU64(Storage.get(ID_COUNTER_KEY));
-    const positions = new Args();
-    let found: u64 = 0;
-    let count: u64 = 0;
-
-    for (let i: u64 = 1; i <= totalMarkets && found < limit; i++) {
-        const marketId = `market_${i.toString()}`;
-        const positionKey = `${marketId}_${userAddress}`;
-        const positionData = Storage.get(stringToBytes(positionKey));
-
-        if (positionData.length > 0) {
-            const positionArgs = new Args(positionData);
-            const userYesTokens = positionArgs.nextU64().unwrap();
-            const userNoTokens = positionArgs.nextU64().unwrap();
-
-            // Only include if user has tokens
-            if (userYesTokens > 0 || userNoTokens > 0) {
-                if (count >= offset) {
-                    positions.add(marketId);
-                    positions.add(userYesTokens);
-                    positions.add(userNoTokens);
-                    found++;
-                }
-                count++;
-            }
-        }
+    const roundId = args.nextU64().expect("Round ID is required");
+    
+    const currentTime = Context.timestamp();
+    
+    // Get round data
+    const roundKey = stringToBytes(ROUND_PREFIX + roundId.toString());
+    const roundData = Storage.get(roundKey);
+    assert(roundData.length > 0, "Round not found");
+    
+    const roundArgs = new Args(roundData);
+    const storedRoundId = roundArgs.nextU64().unwrap();
+    const startTime = roundArgs.nextU64().unwrap();
+    const settlementTime = roundArgs.nextU64().unwrap();
+    const bettingEndTime = roundArgs.nextU64().unwrap();
+    const startPrice = roundArgs.nextF64().unwrap();
+    let endPrice = roundArgs.nextF64().unwrap();
+    const totalUpBets = roundArgs.nextU64().unwrap();
+    const totalDownBets = roundArgs.nextU64().unwrap();
+    const houseUpExposure = roundArgs.nextU64().unwrap();
+    const houseDownExposure = roundArgs.nextU64().unwrap();
+    let status = roundArgs.nextU8().unwrap();
+    let upWins = roundArgs.nextBool().unwrap();
+    
+    // Validate settlement is allowed
+    assert(status !== ROUND_STATUS_SETTLED, "Round already settled");
+    assert(currentTime >= settlementTime, "Settlement time not reached");
+    
+    // Get final price from oracle 
+    const resultArgs = new Args(getCurrentPrice());
+    endPrice = resultArgs.nextF64().unwrap();
+    
+    // Determine winner
+    upWins = endPrice > startPrice;
+    status = ROUND_STATUS_SETTLED;
+    
+    // Calculate house P&L
+    let housePayout: u64 = 0;
+    if (upWins && totalUpBets > 0) {
+        // UP wins - house pays UP bettors
+        housePayout = u64(f64(totalUpBets) * FIXED_PAYOUT_MULTIPLIER);
+    } else if (!upWins && totalDownBets > 0) {
+        // DOWN wins - house pays DOWN bettors
+        housePayout = u64(f64(totalDownBets) * FIXED_PAYOUT_MULTIPLIER);
     }
-
-    return positions.add(count).serialize();
+    
+    // Update house balance
+    const houseBalance = bytesToU64(Storage.get(HOUSE_BALANCE_KEY));
+    let newHouseBalance = houseBalance;
+    
+    if (housePayout > 0) {
+        assert(houseBalance >= housePayout, "House insufficient balance for payout");
+        newHouseBalance = houseBalance - housePayout;
+    }
+    
+    Storage.set(HOUSE_BALANCE_KEY, u64ToBytes(newHouseBalance));
+    
+    // Update round data
+    const settledRoundData = new Args()
+        .add(storedRoundId)
+        .add(startTime)
+        .add(settlementTime)
+        .add(bettingEndTime)
+        .add(startPrice)
+        .add(endPrice)
+        .add(totalUpBets)
+        .add(totalDownBets)
+        .add(houseUpExposure)
+        .add(houseDownExposure)
+        .add(status)
+        .add(upWins)
+        .serialize();
+    
+    Storage.set(roundKey, settledRoundData);
+    
+    const winDirection = upWins ? "UP" : "DOWN";
+    const housePnL = i64(houseBalance + totalUpBets + totalDownBets - newHouseBalance - housePayout);
+    
+    generateEvent(`Round ${roundId.toString()} settled: Start ${startPrice.toString()}, End ${endPrice.toString()}, Winner ${winDirection}, House P&L ${housePnL.toString()}`);
+    
+    return new Args().add(upWins).add(endPrice).add(housePayout).serialize();
 }
 
-// Helper function to get claimable amount for a user
-export function getClaimableAmount(binaryArgs: StaticArray<u8>): StaticArray<u8> {
-    const args = new Args(binaryArgs);
-    const marketId = args.nextString().expect("Market ID is required");
-    const userAddress = args.nextString().expect("User address is required");
-
-    // Get market data
-    const marketData = Storage.get(stringToBytes(marketId));
-    if (marketData.length === 0) {
-        return new Args().add(u64(0)).serialize();
-    }
-
-    const marketArgs = new Args(marketData);
-    marketArgs.nextString(); // creator
-    marketArgs.nextString(); // asset
-    marketArgs.nextBool(); // direction
-    marketArgs.nextF64(); // targetPrice
-    marketArgs.nextF64(); // currentPrice
-    marketArgs.nextU64(); // expirationPeriod
-    marketArgs.nextU64(); // createdPeriod
-    marketArgs.nextString(); // dataSource
-    const yesPool = marketArgs.nextU64().unwrap();
-    const noPool = marketArgs.nextU64().unwrap();
-    const resolved = marketArgs.nextBool().unwrap();
-    const yesWins = marketArgs.nextBool().unwrap();
-
-    if (!resolved) {
-        return new Args().add(u64(0)).serialize();
-    }
-
-    // Check if already claimed
-    const claimedKey = `${marketId}_${userAddress}_claimed`;
-    if (Storage.has(stringToBytes(claimedKey))) {
-        return new Args().add(u64(0)).serialize();
-    }
-
-    // Get user's position
-    const positionKey = `${marketId}_${userAddress}`;
-    const positionData = Storage.get(stringToBytes(positionKey));
-    if (positionData.length === 0) {
-        return new Args().add(u64(0)).serialize();
-    }
-
-    const positionArgs = new Args(positionData);
-    const userYesTokens = positionArgs.nextU64().unwrap();
-    const userNoTokens = positionArgs.nextU64().unwrap();
-
-    // Calculate potential winnings
-    let winnings: u64 = 0;
-    const totalPool = yesPool + noPool;
-
-    if (yesWins && userYesTokens > 0 && yesPool > 0) {
-        winnings = (userYesTokens * totalPool) / yesPool;
-    } else if (!yesWins && userNoTokens > 0 && noPool > 0) {
-        winnings = (userNoTokens * totalPool) / noPool;
-    }
-
-    return new Args().add(winnings).serialize();
-}
-
-// Function to claim winnings from a resolved market
+// Claim winnings from settled round
 export function claimWinnings(binaryArgs: StaticArray<u8>): StaticArray<u8> {
     const args = new Args(binaryArgs);
-    const marketId = args.nextString().expect("Market ID is required");
-
-    // Get market data
-    const marketData = Storage.get(stringToBytes(marketId));
-    assert(marketData.length > 0, "Market not found");
-
-    const marketArgs = new Args(marketData);
-    marketArgs.nextString();
-    marketArgs.nextString();
-    marketArgs.nextBool();
-    marketArgs.nextF64();
-    marketArgs.nextF64();
-    marketArgs.nextU64();
-    marketArgs.nextU64();
-    marketArgs.nextString();
-    const yesPool = marketArgs.nextU64().unwrap();
-    const noPool = marketArgs.nextU64().unwrap();
-    const resolved = marketArgs.nextBool().unwrap();
-    const yesWins = marketArgs.nextBool().unwrap();
-
-    // Validation
-    assert(resolved, "Market not resolved yet");
-
-    // Get user's position
-    const positionKey = `${marketId}_${Context.caller().toString()}`;
-    const positionData = Storage.get(stringToBytes(positionKey));
-    assert(positionData.length > 0, "No position found for this user");
-
-    const positionArgs = new Args(positionData);
-    const userYesTokens = positionArgs.nextU64().unwrap();
-    const userNoTokens = positionArgs.nextU64().unwrap();
-
+    const roundId = args.nextU64().expect("Round ID is required");
+    
+    const user = Context.caller().toString();
+    
+    // Get round data
+    const roundKey = stringToBytes(ROUND_PREFIX + roundId.toString());
+    const roundData = Storage.get(roundKey);
+    assert(roundData.length > 0, "Round not found");
+    
+    const roundArgs = new Args(roundData);
+    roundArgs.nextU64(); // roundId
+    roundArgs.nextU64(); // startTime
+    roundArgs.nextU64(); // settlementTime
+    roundArgs.nextU64(); // bettingEndTime
+    roundArgs.nextF64(); // startPrice
+    roundArgs.nextF64(); // endPrice
+    roundArgs.nextU64(); // totalUpBets
+    roundArgs.nextU64(); // totalDownBets
+    roundArgs.nextU64(); // houseUpExposure
+    roundArgs.nextU64(); // houseDownExposure
+    const status = roundArgs.nextU8().unwrap();
+    const upWins = roundArgs.nextBool().unwrap();
+    
+    assert(status === ROUND_STATUS_SETTLED, "Round not settled yet");
+    
+    // Get user bet
+    const betKey = stringToBytes(USER_BET_PREFIX + roundId.toString() + "_" + user);
+    const betData = Storage.get(betKey);
+    assert(betData.length > 0, "No bet found for user");
+    
+    const betArgs = new Args(betData);
+    betArgs.nextU64(); // roundId
+    betArgs.nextString(); // user
+    const userUpBets = betArgs.nextU64().unwrap();
+    const userDownBets = betArgs.nextU64().unwrap();
+    
     // Calculate winnings
     let winnings: u64 = 0;
-    const totalPool = yesPool + noPool;
-
-    if (yesWins) {
-        // YES wins - calculate share based on YES tokens
-        if (userYesTokens > 0 && yesPool > 0) {
-            winnings = (userYesTokens * totalPool) / yesPool;
-        }
-    } else {
-        // NO wins - calculate share based on NO tokens
-        if (userNoTokens > 0 && noPool > 0) {
-            winnings = (userNoTokens * totalPool) / noPool;
-        }
+    if (upWins && userUpBets > 0) {
+        winnings = u64(f64(userUpBets) * FIXED_PAYOUT_MULTIPLIER);
+    } else if (!upWins && userDownBets > 0) {
+        winnings = u64(f64(userDownBets) * FIXED_PAYOUT_MULTIPLIER);
     }
-
+    
     assert(winnings > 0, "No winnings to claim");
-
-    // Check if already claimed (mark position as claimed)
-    const claimedKey = `${marketId}_${Context.caller().toString()}_claimed`;
-    assert(!Storage.has(stringToBytes(claimedKey)), "Winnings already claimed");
-
+    
+    // Check if already claimed
+    const claimedKey = stringToBytes(USER_BET_PREFIX + roundId.toString() + "_" + user + "_claimed");
+    assert(!Storage.has(claimedKey), "Winnings already claimed");
+    
     // Mark as claimed
-    Storage.set(stringToBytes(claimedKey), stringToBytes("true"));
-
+    Storage.set(claimedKey, stringToBytes("true"));
+    
     // Transfer winnings
     transferCoins(Context.caller(), winnings);
-
-    generateEvent(`Winnings claimed: ${marketId}, user: ${Context.caller().toString()}, amount: ${winnings.toString()}`);
-
+    
+    generateEvent(`Winnings claimed: Round ${roundId.toString()}, User ${user}, Amount ${winnings.toString()}`);
+    
     return new Args().add(winnings).serialize();
 }
 
-export function autoResolveMarket(binaryArgs: StaticArray<u8>): void {
+// Get round details
+export function getRoundDetails(binaryArgs: StaticArray<u8>): StaticArray<u8> {
     const args = new Args(binaryArgs);
-    const marketId = args.nextString().expect("Market ID is required");
+    const roundId = args.nextU64().expect("Round ID is required");
+    
+    const roundKey = stringToBytes(ROUND_PREFIX + roundId.toString());
+    const roundData = Storage.get(roundKey);
+    assert(roundData.length > 0, "Round not found");
+    
+    return roundData; // Return complete round data
+}
 
-    // Get market data
-    const marketData = Storage.get(stringToBytes(marketId));
-    if (marketData.length === 0) {
-        generateEvent(`Auto-resolution failed: Market ${marketId} not found`);
-        return;
+// Get current active round
+export function getCurrentRound(): StaticArray<u8> {
+    const roundCounter = bytesToU64(Storage.get(ROUND_COUNTER_KEY));
+    
+    if (roundCounter === 0) {
+        return new Args().add(u64(0)).serialize(); // No rounds created yet
     }
+    
+    // Return the latest round
+    return getRoundDetails(new Args().add(roundCounter).serialize());
+}
 
-    const marketArgs = new Args(marketData);
-    marketArgs.nextString(); // creator
-    marketArgs.nextString(); // asset
-    marketArgs.nextBool();
-    marketArgs.nextF64();
-    marketArgs.nextF64(); // currentPrice
-    const expirationTimestamp = marketArgs.nextU64().unwrap();
-    marketArgs.nextU64(); // createdTimestamp
-    const dataSource = marketArgs.nextString().unwrap();
-    marketArgs.nextU64(); // yesPool
-    marketArgs.nextU64(); // noPool
-    const resolved = marketArgs.nextBool().unwrap();
-
-    // Check if already resolved
-    if (resolved) {
-        generateEvent(`Market ${marketId} already resolved`);
-        return;
+// Get user bet for specific round
+export function getUserBet(binaryArgs: StaticArray<u8>): StaticArray<u8> {
+    const args = new Args(binaryArgs);
+    const roundId = args.nextU64().expect("Round ID is required");
+    const userAddress = args.nextString().expect("User address is required");
+    
+    const betKey = stringToBytes(USER_BET_PREFIX + roundId.toString() + "_" + userAddress);
+    const betData = Storage.get(betKey);
+    
+    if (betData.length === 0) {
+        // Return empty bet
+        return new Args().add(roundId).add(userAddress).add(u64(0)).add(u64(0)).serialize();
     }
+    
+    return betData;
+}
 
-    // Check if market has actually expired
-    const currentTimestamp = Context.timestamp();
-    if (currentTimestamp < expirationTimestamp) {
-        generateEvent(`Market ${marketId} has not expired yet`);
-        return;
-    }
-
-    // Get price from oracle/data source
-    // For now, we'll use a mock price
-    const finalPrice = getMockPrice(dataSource);
-
-    // Resolve the market
-    const resolveArgs = new Args()
-        .add(marketId)
-        .add(finalPrice)
+// Get house status
+export function getHouseStatus(): StaticArray<u8> {
+    const houseBalance = bytesToU64(Storage.get(HOUSE_BALANCE_KEY));
+    const roundCounter = bytesToU64(Storage.get(ROUND_COUNTER_KEY)); 
+    
+    return new Args()
+        .add(houseBalance)
+        .add(roundCounter) 
+        .add(FIXED_PAYOUT_MULTIPLIER)
+        .add(MIN_BET_AMOUNT)
+        .add(ROUND_DURATION)
         .serialize();
-
-    resolveMarket(resolveArgs);
-
-    generateEvent(`Market ${marketId} auto-resolved with price ${finalPrice.toString()}`);
 }
 
-// TODO: will be use Oracle
-function getMockPrice(dataSource: string): f64 {
-    // For testing, return a mock price based on data source
-    if (dataSource === "UMBRELLA_MAS_PRICE") return 0.1;
-    if (dataSource === "UMBRELLA_BTC_PRICE") return 100000.0;
-    if (dataSource === "UMBRELLA_ETH_PRICE") return 3000.0;
-    if (dataSource === "DUSA_MAS_USDC") return 0.15;
-    return 1.0; // default
+// Add funds to house (only admin)
+export function addHouseFunds(): StaticArray<u8> { 
+
+    const caller = Context.caller().toString();
+    const isOwner = caller === ownerAddress([]).toString();
+    const isAuthorized = isAdmin(caller);
+
+    assert(isOwner || isAuthorized, "Caller not authorized to add funds");
+    
+    const additionalFunds = transferredCoins();
+    assert(additionalFunds > 0, "Must send MAS to add funds");
+    
+    const currentBalance = bytesToU64(Storage.get(HOUSE_BALANCE_KEY));
+    const newBalance = currentBalance + additionalFunds;
+    
+    Storage.set(HOUSE_BALANCE_KEY, u64ToBytes(newBalance));
+    
+    generateEvent(`House funds added: ${additionalFunds.toString()}, New balance: ${newBalance.toString()}`);
+    
+    return new Args().add(newBalance).serialize();
 }
 
-// Helper function to convert timestamp to period
-function timestampToPeriod(timestamp: u64): u64 {
-    return (timestamp - GENESIS_TIMESTAMP) / T0;
+// Withdraw house funds (only admin)
+export function withdrawHouseFunds(binaryArgs: StaticArray<u8>): StaticArray<u8> {
+    const caller = Context.caller().toString();
+    const isOwner = caller === ownerAddress([]).toString();
+    const isAuthorized = isAdmin(caller);
+
+    assert(isOwner || isAuthorized, "Caller not authorized to withdraw funds");
+    
+    const args = new Args(binaryArgs);
+    const amount = args.nextU64().expect("Amount is required");
+    
+    const currentBalance = bytesToU64(Storage.get(HOUSE_BALANCE_KEY));
+    assert(amount <= currentBalance, "Insufficient house balance");
+    
+    // Keep minimum reserve for ongoing rounds
+    const minReserve = HOUSE_INITIAL_BALANCE / 10; // 10% of initial
+    assert(currentBalance - amount >= minReserve, "Cannot withdraw below minimum reserve");
+    
+    const newBalance = currentBalance - amount;
+    Storage.set(HOUSE_BALANCE_KEY, u64ToBytes(newBalance));
+    
+    transferCoins(Context.caller(), amount);
+    
+    generateEvent(`House funds withdrawn: ${amount.toString()}, Remaining balance: ${newBalance.toString()}`);
+    
+    return new Args().add(newBalance).serialize();
 }
 
-// Helper function to convert period to timestamp
-// function periodToTimestamp(period: u64): u64 {
-//     return GENESIS_TIMESTAMP + (period * T0);
-// }
+// Update Oracle price
+export function updateOraclePrice(binaryArgs: StaticArray<u8>): void {
+    const caller = Context.caller().toString();
+    const isOwner = caller === ownerAddress([]).toString();
+    const isAuthorized = isAdmin(caller);
+
+    assert(isOwner || isAuthorized, "Caller not authorized to update price");
+
+    const args = new Args(binaryArgs);
+    const newPrice = args.nextF64().expect("New price is required");
+    const timestamp = args.nextU64().expect("Timestamp is required");
+
+    // Validate timestamp (should be recent)
+    const currentTime = Context.timestamp();
+    assert(timestamp <= currentTime && (currentTime - timestamp) <= MAX_PRICE_AGE, "Timestamp too old or in future");
+
+    // Store current price and update time
+    Storage.set(CURRENT_PRICE_KEY, f64ToBytes(newPrice));
+    Storage.set(LAST_UPDATE_KEY, u64ToBytes(timestamp));
+
+    // Store in price history (for potential future use)
+    const historyKey = stringToBytes(PRICE_HISTORY_PREFIX + timestamp.toString());
+    Storage.set(historyKey, f64ToBytes(newPrice));
+
+    generateEvent(`Price updated: ${newPrice.toString()} at timestamp ${timestamp.toString()}`);
+}
+
+// Get current Oracle price (Only BTC on V.1)
+export function getCurrentPrice(): StaticArray<u8> {
+    const priceData = Storage.get(CURRENT_PRICE_KEY);
+    assert(priceData.length > 0, "No price data available");
+
+    const lastUpdateData = Storage.get(LAST_UPDATE_KEY);
+    assert(lastUpdateData.length > 0, "No update time available");
+
+    const price = bytesToF64(priceData);
+    const lastUpdate = bytesToU64(lastUpdateData);
+    const currentTime = Context.timestamp();
+
+    // Check if price is still fresh
+    const priceAge = currentTime - lastUpdate;
+    const isStale = priceAge > MAX_PRICE_AGE;
+
+    return new Args()
+        .add(price)           // Current BTC price
+        .add(lastUpdate)      // Last update timestamp
+        .add(priceAge)        // Age of price data in milliseconds
+        .add(isStale)         // Whether price is considered stale
+        .serialize();
+}
+
+
+// Get price at specific timestamp (for historical data)
+export function getPriceAtTime(binaryArgs: StaticArray<u8>): StaticArray<u8> {
+    const args = new Args(binaryArgs);
+    const timestamp = args.nextU64().expect("Timestamp is required");
+    
+    const historyKey = stringToBytes(PRICE_HISTORY_PREFIX + timestamp.toString());
+    const priceData = Storage.get(historyKey);
+    
+    if (priceData.length === 0) {
+        // No exact match, return current price as fallback
+        const currentPriceData = Storage.get(CURRENT_PRICE_KEY);
+        if (currentPriceData.length === 0) {
+            return new Args().add(f64(0)).add(false).serialize();
+        }
+        
+        const currentPrice = bytesToF64(currentPriceData);
+        return new Args().add(currentPrice).add(false).serialize(); // false = not exact match
+    }
+    
+    const price = bytesToF64(priceData);
+    return new Args().add(price).add(true).serialize(); // true = exact match
+}
 
