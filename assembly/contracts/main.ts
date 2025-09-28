@@ -1,8 +1,19 @@
 import {
-    Context, generateEvent, Storage, transferredCoins, transferCoins, balance, asyncCall,
+    Context, 
+    generateEvent, 
+    Storage, 
+    transferredCoins, 
+    transferCoins, 
+    balance, 
+    call,
+    deferredCallRegister,
+    deferredCallQuote,
+    deferredCallCancel,
+    deferredCallExists,
+    findCheapestSlot,
     Slot
 } from '@massalabs/massa-as-sdk';
-import { Args, bytesToF64, u64ToBytes, stringToBytes, bytesToU64, f64ToBytes } from '@massalabs/as-types';
+import { Args, bytesToString, bytesToF64, u64ToBytes, stringToBytes, bytesToU64, f64ToBytes } from '@massalabs/as-types';
 import {
     ownerAddress,
     setOwner,
@@ -19,6 +30,11 @@ const LAST_UPDATE_KEY = stringToBytes('LAST_UPDATE_TIME');
 const PRICE_HISTORY_PREFIX = 'PRICE_HISTORY_';
 const ADMIN_PREFIX = 'ADMIN_';
 
+// Automation storage keys
+const AUTO_ENABLED_KEY = stringToBytes('AUTO_ENABLED');
+const NEXT_ROUND_CALL_ID_KEY = stringToBytes('NEXT_ROUND_CALL');
+const SETTLEMENT_CALL_PREFIX = 'SETTLEMENT_CALL_';
+
 // Round status enum
 const ROUND_STATUS_ACTIVE: u8 = 0;
 // const ROUND_STATUS_BETTING_CLOSED: u8 = 1;
@@ -26,8 +42,6 @@ const ROUND_STATUS_SETTLED: u8 = 2;
 // const ROUND_STATUS_CANCELLED: u8 = 3;
 
 // Constants
-// const GENESIS_TIMESTAMP: u64 = 1704289800000; // Buildnet genesis timestamp
-// const T0: u64 = 16000; // 16 seconds per period in milliseconds
 const ROUND_DURATION: u64 = 60 * 60 * 1000; // 60 minutes in milliseconds
 const BETTING_CUTOFF: u64 = 5 * 60 * 1000;  // Stop betting 5 min before end
 const MIN_BET_AMOUNT: u64 = 1_000_000_000;   // 1 MAS minimum bet
@@ -35,6 +49,12 @@ const HOUSE_INITIAL_BALANCE: u64 = 100_000_000_000_000; // 100k MAS house reserv
 const MAX_PRICE_AGE: u64 = 5 * 60 * 1000; // 5 minutes in milliseconds
 const VIRTUAL_LIQUIDITY: u64 = 1_000_000_000_000; // 1000 MAS virtual liquidity for AMM
 const HOUSE_EDGE: f64 = 0.05; // 5% house edge
+
+// Automation constants
+const AUTOMATION_GAS: u64 = 20_000_000; // Gas for automated calls
+const PERIODS_PER_HOUR: u64 = 225; // ~16 seconds per period, 3600/16 = 225
+const ROUND_CREATION_PERIOD_OFFSET: u64 = PERIODS_PER_HOUR; // Create next round 1 hour ahead
+const SETTLEMENT_PERIOD_OFFSET: u64 = 5; // Settle 5 periods after round ends
 
 
 export function constructor(_: StaticArray<u8>): void {
@@ -48,6 +68,7 @@ export function constructor(_: StaticArray<u8>): void {
     Storage.set(LAST_UPDATE_KEY, u64ToBytes(currentTime));
     Storage.set(ROUND_COUNTER_KEY, u64ToBytes(0));
     Storage.set(HOUSE_BALANCE_KEY, u64ToBytes(HOUSE_INITIAL_BALANCE));
+    Storage.set(AUTO_ENABLED_KEY, stringToBytes('false')); // Automation starts disabled
 
     generateEvent(`Oracle initialized with price: ${initialPrice.toString()}`);
 }
@@ -156,6 +177,11 @@ export function createRound(): StaticArray<u8> {
     const roundKey = stringToBytes(ROUND_PREFIX + roundId.toString());
     Storage.set(roundKey, roundData);
     Storage.set(ROUND_COUNTER_KEY, u64ToBytes(newRoundCounter));
+    
+    // Schedule automated settlement if automation is enabled
+    if (isAutomationEnabled()) {
+        scheduleRoundSettlement(roundId, settlementTime);
+    }
 
     generateEvent(`Round ${roundId.toString()} created: Start price ${startPrice.toString()}, Settlement at ${settlementTime.toString()}`);
 
@@ -645,5 +671,191 @@ export function getPriceAtTime(binaryArgs: StaticArray<u8>): StaticArray<u8> {
 
     const price = bytesToF64(priceData);
     return new Args().add(price).add(true).serialize(); // true = exact match
+}
+
+// ====================================
+// AUTOMATION SYSTEM (Deferred Calls)
+// ====================================
+
+// Enable/disable automation (only owner)
+export function setAutomation(binaryArgs: StaticArray<u8>): void {
+    onlyOwner();
+    
+    const args = new Args(binaryArgs);
+    const enabled = args.nextBool().expect("Enabled flag is required");
+    
+    Storage.set(AUTO_ENABLED_KEY, stringToBytes(enabled ? 'true' : 'false'));
+    
+    if (enabled) {
+        // Schedule first round creation
+        scheduleNextRoundCreation();
+        generateEvent('Automation enabled - first round scheduled');
+    } else {
+        // Cancel existing automation
+        cancelAutomation();
+        generateEvent('Automation disabled');
+    }
+}
+
+// Check if automation is enabled
+function isAutomationEnabled(): bool {
+    const autoData = Storage.get(AUTO_ENABLED_KEY);
+    if (autoData.length === 0) return false;
+    return bytesToString(autoData) === 'true';
+}
+
+// Schedule next round creation using deferred calls
+function scheduleNextRoundCreation(): void {
+    if (!isAutomationEnabled()) return;
+    
+    const currentPeriod = Context.currentPeriod();
+    const targetPeriod = currentPeriod + ROUND_CREATION_PERIOD_OFFSET;
+    
+    // Find cheapest slot for round creation
+    const slot = findCheapestSlot(
+        targetPeriod,
+        targetPeriod + 10, // Allow 10 periods flexibility
+        AUTOMATION_GAS,
+        0 // No parameters for createRound
+    );
+    
+    // Register deferred call
+    const callId = deferredCallRegister(
+        Context.callee().toString(),
+        'automatedCreateRound',
+        slot,
+        AUTOMATION_GAS,
+        new Args().serialize(),
+        0 // No coins needed
+    );
+    
+    // Store call ID for potential cancellation
+    Storage.set(NEXT_ROUND_CALL_ID_KEY, stringToBytes(callId));
+    
+    generateEvent(`Next round creation scheduled: Call ID ${callId}, Period ${slot.period.toString()}`);
+}
+
+// Schedule round settlement using deferred calls
+function scheduleRoundSettlement(roundId: u64, settlementTime: u64): void {
+    if (!isAutomationEnabled()) return;
+    
+    // Convert timestamp to period (approximate)
+    const currentPeriod = Context.currentPeriod();
+    const currentTime = Context.timestamp();
+    const timeDiff = settlementTime - currentTime;
+    const periodDiff = timeDiff / 16000; // ~16 seconds per period
+    const targetPeriod = currentPeriod + u64(periodDiff) + SETTLEMENT_PERIOD_OFFSET;
+    
+    // Find cheapest slot for settlement
+    const slot = findCheapestSlot(
+        targetPeriod,
+        targetPeriod + 20, // More flexibility for settlement
+        AUTOMATION_GAS,
+        8 // Size of roundId parameter
+    );
+    
+    // Register deferred settlement call
+    const callId = deferredCallRegister(
+        Context.callee().toString(),
+        'automatedSettleRound',
+        slot,
+        AUTOMATION_GAS,
+        new Args().add(roundId).serialize(),
+        0 // No coins needed
+    );
+    
+    // Store settlement call ID
+    const settlementKey = stringToBytes(SETTLEMENT_CALL_PREFIX + roundId.toString());
+    Storage.set(settlementKey, stringToBytes(callId));
+    
+    generateEvent(`Round ${roundId.toString()} settlement scheduled: Call ID ${callId}, Period ${slot.period.toString()}`);
+}
+
+// Automated round creation (called by deferred call)
+export function automatedCreateRound(): void {
+    // Verify call is from this contract (deferred call)
+    assert(Context.caller() === Context.callee(), 'Can only be called by deferred call');
+    
+    // Create new round
+    const result = createRound();
+    const roundId = new Args(result).nextU64().unwrap();
+    
+    // Get round details for scheduling settlement
+    const roundData = getRoundDetails(new Args().add(roundId).serialize());
+    const roundArgs = new Args(roundData);
+    roundArgs.nextU64(); // roundId
+    roundArgs.nextU64(); // startTime
+    const settlementTime = roundArgs.nextU64().unwrap(); // settlementTime
+    
+    // Schedule settlement for this round
+    scheduleRoundSettlement(roundId, settlementTime);
+    
+    // Schedule next round creation
+    scheduleNextRoundCreation();
+    
+    generateEvent(`Automated round ${roundId.toString()} created and settlement scheduled`);
+}
+
+// Automated round settlement (called by deferred call)
+export function automatedSettleRound(binaryArgs: StaticArray<u8>): void {
+    // Verify call is from this contract (deferred call)
+    assert(Context.caller() === Context.callee(), 'Can only be called by deferred call');
+    
+    const args = new Args(binaryArgs);
+    const roundId = args.nextU64().expect('Round ID is required');
+    
+    // Settle the round
+    const result = settleRound(new Args().add(roundId).serialize());
+    const settleArgs = new Args(result);
+    const upWins = settleArgs.nextBool().unwrap();
+    const endPrice = settleArgs.nextF64().unwrap();
+    
+    generateEvent(`Automated settlement: Round ${roundId.toString()}, Winner: ${upWins ? 'UP' : 'DOWN'}, Price: ${endPrice.toString()}`);
+}
+
+// Cancel all automation (only owner)
+function cancelAutomation(): void {
+    // Cancel next round creation
+    if (Storage.has(NEXT_ROUND_CALL_ID_KEY)) {
+        const callId = bytesToString(Storage.get(NEXT_ROUND_CALL_ID_KEY));
+        if (deferredCallExists(callId)) {
+            deferredCallCancel(callId);
+        }
+        Storage.del(NEXT_ROUND_CALL_ID_KEY);
+    }
+    
+    // Cancel pending settlements (simplified - would need to track all active rounds)
+    generateEvent('Automation cancelled');
+}
+
+// Get automation status
+export function getAutomationStatus(): StaticArray<u8> {
+    const enabled = isAutomationEnabled();
+    let nextCallId = '';
+    let hasNextCall = false;
+    
+    if (Storage.has(NEXT_ROUND_CALL_ID_KEY)) {
+        nextCallId = bytesToString(Storage.get(NEXT_ROUND_CALL_ID_KEY)); 
+        if (deferredCallExists(nextCallId)) {
+            hasNextCall = true;
+        }
+    }
+    
+    return new Args()
+        .add(enabled)        // Automation enabled
+        .add(hasNextCall)    // Has scheduled next round
+        .add(nextCallId)     // Next call ID
+        .serialize();
+}
+
+// Manual trigger for automation setup (only owner)
+export function initializeAutomation(): void {
+    onlyOwner();
+    
+    // Enable automation and schedule first round
+    Storage.set(AUTO_ENABLED_KEY, stringToBytes('true'));
+    scheduleNextRoundCreation();
+    
+    generateEvent('Automation initialized manually');
 }
 
