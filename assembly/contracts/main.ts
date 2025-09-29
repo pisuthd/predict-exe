@@ -51,7 +51,7 @@ const VIRTUAL_LIQUIDITY: u64 = 1_000_000_000_000; // 1000 MAS virtual liquidity 
 const HOUSE_EDGE: f64 = 0.05; // 5% house edge
 
 // Automation constants
-const AUTOMATION_GAS: u64 = 50_000_000; // Gas for automated calls
+const AUTOMATION_GAS: u64 = 20_000_000; // Gas for automated calls
 const PERIODS_PER_HOUR: u64 = 225; // ~16 seconds per period, 3600/16 = 225
 const PERIODS_PER_10_MIN: u64 = 38; // ~16 seconds per period, 600/16 = 37.5 ≈ 38
 const ROUND_CREATION_PERIOD_OFFSET: u64 = PERIODS_PER_10_MIN; // Create next round 10 minutes ahead
@@ -780,20 +780,10 @@ export function automatedCreateRound(): void {
     const result = createRound();
     const roundId = new Args(result).nextU64().unwrap();
     
-    // Get round details for scheduling settlement
-    const roundData = getRoundDetails(new Args().add(roundId).serialize());
-    const roundArgs = new Args(roundData);
-    roundArgs.nextU64(); // roundId
-    roundArgs.nextU64(); // startTime
-    const settlementTime = roundArgs.nextU64().unwrap(); // settlementTime
-    
-    // Schedule settlement for this round
-    scheduleRoundSettlement(roundId, settlementTime);
-    
     // Schedule next round creation
     scheduleNextRoundCreation();
     
-    generateEvent(`Automated round ${roundId.toString()} created and settlement scheduled`);
+    generateEvent(`Automated round ${roundId.toString()} created`);
 }
 
 // Automated round settlement (called by deferred call)

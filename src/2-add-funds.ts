@@ -9,7 +9,7 @@ import {
     bytesToStr
 } from '@massalabs/massa-web3';
 
-const CONTRACT_ADDR = process.env.CONTRACT_ADDRESS || "AS16xjUvqMsrCgXAM3ERKSRvqjtBgWV8cG9bi1jQuCzYe1j1dMma";
+const CONTRACT_ADDR = process.env.CONTRACT_ADDRESS || "AS12Lr1hJzJGknCZp8NT6aDQV3PWwXPoKP5PtaQozKfc1CSAsv1Ww";
 
 const account = await Account.fromEnv();
 const provider = JsonRpcProvider.buildnet(account);
