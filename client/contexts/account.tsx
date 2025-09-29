@@ -1,248 +1,237 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useReducer, useState } from "react"
+import { createContext, useCallback, useContext, useMemo, useReducer, ReactNode } from "react"
+import { Mas, SmartContract, OperationStatus, Args } from '@massalabs/massa-web3'
+import { CONTRACT_ADDRESS } from './market'
 
-import { Mas, Account, JsonRpcProvider, SmartContract, OperationStatus, Args, bytesToArray, bytesToStr, bytesToSerializableObjectArray } from '@massalabs/massa-web3'
-
-export const AccountContext: any = createContext<any>({})
-
-const Provider = ({ children }: any) => {
-
-    const [values, dispatch] = useReducer(
-        (curVal, newVal) => ({ ...curVal, ...newVal }),
-        {
-            account: undefined,
-            provider: undefined,
-        }
-    )
-
-    const { provider, account } = values
-
-    const disconnect = () => {
-        dispatch({
-            account: undefined
-        })
-    }
-
-    const connect = (account: any) => {
-        dispatch({
-            account
-        })
-    }
-
-    // const getUserPositions = useCallback(async (account) => {
-
-    //     const contract = new SmartContract(account, CONTRACT_ADDRESS)
-
-    //     const args = new Args()
-    //         .addString(account.address)
-    //         .addU64(BigInt(0))
-    //         .addU64(BigInt(10))
-
-    //     const result = await contract.read('getUserPositions', args)
-    //     const resultArgs = new Args(result.value);
-
-    //     let positions = []
-
-    //     try {
-    //         while (true) {
-    //             const marketId = resultArgs.nextString()
-    //             const totalYes = resultArgs.nextU64()
-    //             const totalNo = resultArgs.nextU64()
-    //             positions.push({
-    //                 marketId,
-    //                 totalYes: Number(totalYes) / 1000000000,
-    //                 totalNo: Number(totalNo) / 1000000000
-    //             })
-    //         }
-    //     } catch {
-    //         // End of arguments reached
-    //     }
-
-    //     return positions
-
-    // }, [])
-
-    // const getUserPosition = useCallback(async (marketId, account) => {
-
-    //     const contract = new SmartContract(account, CONTRACT_ADDRESS)
-
-    //     const args = new Args()
-    //         .addString(marketId)
-    //         .addString(account.address)
-
-    //     const result = await contract.read('getUserPosition', args)
-    //     const resultArgs = new Args(result.value);
-
-    //     let position = {
-    //         totalYes: 0,
-    //         totalNo: 0
-    //     }
-
-    //     try {
-    //         while (true) {
-    //             const totalYes = resultArgs.nextU64()
-    //             const totalNo = resultArgs.nextU64()
-    //             position.totalYes = Number(totalYes) / 1000000000
-    //             position.totalNo = Number(totalNo) / 1000000000
-    //         }
-    //     } catch {
-    //         // End of arguments reached
-    //     }
-
-    //     return position
-
-    // }, [])
-
-    // const placeBet = useCallback(async (marketId, isYes, amount) => {
-
-    //     if (!account) {
-    //         throw new Error("Wallet not connected")
-    //     }
-
-    //     const betArgs = new Args()
-    //         .addString(marketId)
-    //         .addBool(isYes)
-
-    //     const contract = new SmartContract(account, CONTRACT_ADDRESS)
-
-    //     const operation = await contract.call(
-    //         'placeBet',
-    //         betArgs,
-    //         { coins: Mas.fromString(amount) }
-    //     );
-
-    //     console.log(
-    //         'createMarket function called successfully, operation id:',
-    //         operation.id,
-    //     );
-
-    //     console.log('Waiting for operation to be finalized...');
-    //     const status = await operation.waitFinalExecution();
-    //     console.log('Operation status:', OperationStatus[status]);
-
-    //     if (status !== OperationStatus.Success) {
-    //         throw new Error("Operation failed")
-    //     }
-
-    // }, [provider, account])
-
-    // const createMarket = useCallback(async (marketData) => {
-
-    //     if (!account) {
-    //         throw new Error("Wallet not connected");
-    //     }
-
-    //     if (!provider) {
-    //         throw new Error("Provider not available");
-    //     }
-
-    //     console.log('Creating new prediction market...', marketData);
-
-    //     // Destructure market data
-    //     const {
-    //         asset,
-    //         direction, // 'reach' or 'drop'
-    //         targetPrice,
-    //         currentPrice,
-    //         deadline, // ISO string from datetime-local input
-    //         dataSource,
-    //         creatorPosition, // 'YES' or 'NO'
-    //         creatorStake // number in MAS
-    //     } = marketData;
-
-    //     // Convert direction string to boolean
-    //     const directionBool = direction === 'reach';
-
-    //     // Convert deadline to timestamp
-    //     const expirationTimestamp = new Date(deadline).getTime();
-
-    //     // Convert creator position to boolean
-    //     const creatorPositionBool = creatorPosition === 'YES';
-
-    //     console.log(`Market Details:
-    // - Asset: ${asset}
-    // - Direction: ${direction} (${directionBool})
-    // - Current Price: $${currentPrice || 'Not specified'}
-    // - Target Price: $${targetPrice}
-    // - Expiration: ${new Date(expirationTimestamp).toISOString()}
-    // - Data Source: ${dataSource}
-    // - Creator Position: ${creatorPosition} (${creatorPositionBool})
-    // - Creator Stake: ${creatorStake} MAS
-    //     `);
-
-    //     // Validate required fields
-    //     if (!asset || !targetPrice || !deadline || !dataSource || !creatorPosition || !creatorStake) {
-    //         throw new Error("Missing required market parameters");
-    //     }
-
-    //     if (creatorStake < 1) {
-    //         throw new Error("Minimum stake is 1 MAS");
-    //     }
-
-    //     // Create market arguments
-    //     const createMarketArgs = new Args()
-    //         .addString(asset)
-    //         .addBool(directionBool)
-    //         .addF64(parseFloat(targetPrice))
-    //         .addF64(currentPrice ? parseFloat(currentPrice) : 0.0) // Default to 0 if not provided
-    //         .addU64(BigInt(expirationTimestamp))
-    //         .addString(dataSource)
-    //         .addBool(creatorPositionBool)
-    //         .serialize();
-
-    //     const contract = new SmartContract(account, CONTRACT_ADDRESS);
-
-    //     // Call createMarket with stake amount
-    //     const operation = await contract.call(
-    //         'createMarket',
-    //         createMarketArgs,
-    //         { coins: Mas.fromString(creatorStake.toString()) }
-    //     );
-
-    //     console.log(
-    //         'createMarket function called successfully, operation id:',
-    //         operation.id,
-    //     );
-
-    //     console.log('Waiting for operation to be finalized...');
-    //     const status = await operation.waitFinalExecution();
-    //     console.log('Operation status:', OperationStatus[status]);
-
-    //     if (status !== OperationStatus.Success) {
-    //         throw new Error('Market creation failed');
-    //     }
-
-    // }, [account, provider]);
-
-    const accountContext: any = useMemo(
-        () => ({
-            account,
-            connect,
-            disconnect,
-            provider,
-            setProvider: (provider: any) => {
-                dispatch({
-                    provider
-                })
-            },
-            // placeBet,
-            // getUserPositions,
-            // getUserPosition,
-            // createMarket
-        }),
-        [
-            account,
-            provider,
-            // placeBet,
-            // getUserPositions,
-            // createMarket
-        ]
-    )
-
-    return (
-        <AccountContext.Provider value={accountContext}>
-            {children}
-        </AccountContext.Provider>
-    )
+interface AccountState {
+  account: any;
+  provider: any;
 }
 
-export default Provider
+interface BetResult {
+  betAmount: number;
+  potentialPayout: number;
+}
+
+interface ClaimResult {
+  winnings: number;
+}
+
+interface AccountContextType extends AccountState {
+  connect: (account: any) => void;
+  disconnect: () => void;
+  setProvider: (provider: any) => void;
+  placeBet: (roundId: number, betUp: boolean, amount: string) => Promise<BetResult>;
+  claimWinnings: (roundId: number) => Promise<ClaimResult>;
+}
+
+export const AccountContext = createContext<AccountContextType | undefined>(undefined);
+
+interface ProviderProps {
+  children: ReactNode;
+}
+
+const Provider = ({ children }: ProviderProps) => {
+  const [values, dispatch] = useReducer(
+    (curVal: AccountState, newVal: Partial<AccountState>) => ({ ...curVal, ...newVal }),
+    {
+      account: undefined,
+      provider: undefined,
+    }
+  );
+
+  const { provider, account } = values;
+
+  const disconnect = useCallback(() => {
+    dispatch({
+      account: undefined,
+    });
+  }, []);
+
+  const connect = useCallback((account: any) => {
+    dispatch({
+      account,
+    });
+  }, []);
+
+  const setProvider = useCallback((provider: any) => {
+    dispatch({
+      provider,
+    });
+  }, []);
+
+  /**
+   * Place a bet on the current round
+   * @param roundId - The round ID to bet on
+   * @param betUp - true for UP, false for DOWN
+   * @param amount - Bet amount in MAS (as string)
+   * @returns Promise with bet amount and potential payout
+   */
+  const placeBet = useCallback(async (
+    roundId: number,
+    betUp: boolean,
+    amount: string
+  ): Promise<BetResult> => {
+    if (!account) {
+      throw new Error("Wallet not connected");
+    }
+
+    if (!provider) {
+      throw new Error("Provider not available");
+    }
+
+    console.log('Placing bet:', {
+      roundId,
+      direction: betUp ? 'UP' : 'DOWN',
+      amount: `${amount} MAS`,
+    });
+
+    // Validate bet amount
+    const betAmountNum = parseFloat(amount);
+    if (isNaN(betAmountNum) || betAmountNum < 1) {
+      throw new Error("Minimum bet is 1 MAS");
+    }
+
+    // Create bet arguments
+    const betArgs = new Args()
+      .addU64(BigInt(roundId))
+      .addBool(betUp);
+
+    const contract = new SmartContract(account, CONTRACT_ADDRESS);
+
+    // Call placeBet with the bet amount
+    const operation = await contract.call(
+      'placeBet',
+      betArgs,
+      { coins: Mas.fromString(amount) }
+    );
+
+    console.log('Bet transaction submitted, operation id:', operation.id);
+
+    // Wait for operation to be finalized
+    console.log('Waiting for operation to be finalized...');
+    const status = await operation.waitFinalExecution();
+    console.log('Operation status:', OperationStatus[status]);
+
+    if (status !== OperationStatus.Success) {
+      throw new Error("Bet transaction failed");
+    }
+
+    // Parse the result to get bet amount and potential payout
+    // The contract returns: betAmount, potentialPayout
+    const resultArgs = new Args(operation.events[0]?.data || new Uint8Array());
+    let betAmount = 0;
+    let potentialPayout = 0;
+
+    try {
+      betAmount = Number(resultArgs.nextU64()) / 1_000_000_000;
+      potentialPayout = Number(resultArgs.nextU64()) / 1_000_000_000;
+    } catch {
+      // If parsing fails, use the input amount
+      betAmount = betAmountNum;
+      potentialPayout = betAmountNum; // Fallback
+    }
+
+    console.log('Bet placed successfully:', {
+      betAmount: `${betAmount} MAS`,
+      potentialPayout: `${potentialPayout} MAS`,
+    });
+
+    return {
+      betAmount,
+      potentialPayout,
+    };
+  }, [account, provider]);
+
+  /**
+   * Claim winnings from a settled round
+   * @param roundId - The round ID to claim from
+   * @returns Promise with winnings amount
+   */
+  const claimWinnings = useCallback(async (roundId: number): Promise<ClaimResult> => {
+    if (!account) {
+      throw new Error("Wallet not connected");
+    }
+
+    if (!provider) {
+      throw new Error("Provider not available");
+    }
+
+    console.log('Claiming winnings for round:', roundId);
+
+    const claimArgs = new Args().addU64(BigInt(roundId));
+
+    const contract = new SmartContract(account, CONTRACT_ADDRESS);
+
+    // Call claimWinnings
+    const operation = await contract.call(
+      'claimWinnings',
+      claimArgs,
+      { coins: Mas.fromString('0') } // No coins needed for claiming
+    );
+
+    console.log('Claim transaction submitted, operation id:', operation.id);
+
+    // Wait for operation to be finalized
+    console.log('Waiting for operation to be finalized...');
+    const status = await operation.waitFinalExecution();
+    console.log('Operation status:', OperationStatus[status]);
+
+    if (status !== OperationStatus.Success) {
+      throw new Error("Claim transaction failed");
+    }
+
+    // Parse the result to get winnings
+    const resultArgs = new Args(operation.events[0]?.data || new Uint8Array());
+    let winnings = 0;
+
+    try {
+      winnings = Number(resultArgs.nextU64()) / 1_000_000_000;
+    } catch {
+      console.warn('Could not parse winnings from result');
+    }
+
+    console.log('Winnings claimed successfully:', `${winnings} MAS`);
+
+    return {
+      winnings,
+    };
+  }, [account, provider]);
+
+  const accountContext: AccountContextType = useMemo(
+    () => ({
+      account,
+      provider,
+      connect,
+      disconnect,
+      setProvider,
+      placeBet,
+      claimWinnings,
+    }),
+    [
+      account,
+      provider,
+      connect,
+      disconnect,
+      setProvider,
+      placeBet,
+      claimWinnings,
+    ]
+  );
+
+  return (
+    <AccountContext.Provider value={accountContext}>
+      {children}
+    </AccountContext.Provider>
+  );
+};
+
+// Custom hook to use account context
+export const useAccount = () => {
+  const context = useContext(AccountContext);
+  if (!context) {
+    throw new Error('useAccount must be used within AccountProvider');
+  }
+  return context;
+};
+
+export default Provider;
