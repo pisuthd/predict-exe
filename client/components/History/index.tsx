@@ -233,7 +233,7 @@ export const HistoryContainer = () => {
   // Show loading only on initial load
   if (isInitialLoad && (loadingHistory || isLoading)) {
     return (
-      <div className="min-h-screen bg-gradient-to-b from-black via-gray-950 to-black font-mono flex items-center justify-center">
+      <div className="min-h-screen  font-mono flex items-center justify-center">
         <div className="bg-black border-2 border-cyan-500 p-8 text-center animate-pulse">
           <div className="text-cyan-500 text-xl font-bold mb-2">LOADING HISTORY...</div>
           <div className="text-gray-400">Fetching round data from blockchain</div>
@@ -243,7 +243,7 @@ export const HistoryContainer = () => {
   }
 
   return (
-    <div className="min-h-screen relative bg-gradient-to-b from-black via-gray-950 to-black font-mono">
+    <div className="min-h-screen relative  font-mono">
       <div className="max-w-7xl mx-auto px-4 py-8 relative">
         {/* Header */}
         <div className="bg-black border-2 border-cyan-500 mb-8 transition-all duration-300">

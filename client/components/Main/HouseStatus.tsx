@@ -7,8 +7,7 @@ const HouseStatus = () => {
     return (
         <div className="bg-black border-2 border-cyan-500/50 transition-all duration-300 hover:border-cyan-500">
             <div className="bg-cyan-500/20 border-b border-cyan-500/50 p-3">
-                <div className="flex items-center space-x-2">
-                    <Shield className="w-5 h-5 text-cyan-500" />
+                <div className="flex items-center space-x-2"> 
                     <h3 className="text-cyan-300 font-bold tracking-wider">HOUSE STATUS</h3>
                 </div>
             </div>
@@ -37,12 +36,12 @@ const HouseStatus = () => {
                         {houseStatus ? `${(houseStatus.houseEdge * 100).toFixed(1)}%` : '5.0%'}
                     </span>
                 </div>
-                <div className="flex justify-between items-center">
+                {/* <div className="flex justify-between items-center">
                     <span className="text-gray-400 text-sm">VIRTUAL LIQ:</span>
                     <span className="text-purple-500 font-bold">
                         {houseStatus ? `${houseStatus.virtualLiquidity.toFixed(0)} MAS` : '1000 MAS'}
                     </span>
-                </div>
+                </div> */}
                 {automationStatus && (
                     <div className="flex justify-between items-center pt-2 border-t border-gray-700">
                         <span className="text-gray-400 text-sm">AUTOMATION:</span>

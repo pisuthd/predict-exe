@@ -6,7 +6,7 @@ export const Footer = () => {
     <footer className="relative z-10 mt-16 border-t-2 border-cyan-500/50 bg-black/90 backdrop-blur-sm font-mono">
       {/* Main Footer Content */}
       <div className="max-w-7xl mx-auto px-4 py-12">
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8"> 
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8"> 
           <div className="space-y-4">
             <div className="flex items-center space-x-3"> 
               <div>
@@ -28,25 +28,22 @@ export const Footer = () => {
             <ul className="space-y-2 text-sm">
               <li>
                 <a href="/trade" className="text-gray-400 hover:text-cyan-500 transition-colors flex items-center space-x-2">
-                  <Terminal className="w-3 h-3" />
                   <span>TRADE</span>
                 </a>
               </li>
               <li>
                 <a href="/history" className="text-gray-400 hover:text-cyan-500 transition-colors flex items-center space-x-2">
-                  <Code className="w-3 h-3" />
                   <span>HISTORY</span>
                 </a>
               </li>
-              <li>
+              {/* <li>
                 <a href="/stats" className="text-gray-400 hover:text-cyan-500 transition-colors flex items-center space-x-2">
                   <Zap className="w-3 h-3" />
                   <span>STATISTICS</span>
                 </a>
-              </li>
+              </li> */}
               <li>
                 <a href="/about" className="text-gray-400 hover:text-cyan-500 transition-colors flex items-center space-x-2">
-                  <Shield className="w-3 h-3" />
                   <span>ABOUT</span>
                 </a>
               </li>
@@ -54,7 +51,7 @@ export const Footer = () => {
           </div>
 
           {/* Technical Info */}
-          <div className="space-y-4">
+          {/* <div className="space-y-4">
             <h4 className="text-green-400 font-bold tracking-wider text-sm border-b border-green-500/30 pb-2">
               TECHNICAL
             </h4>
@@ -87,7 +84,7 @@ export const Footer = () => {
                 <span>MASSA NETWORK</span>
               </a>
             </div>
-          </div>
+          </div> */}
 
           {/* Community & Legal */}
           <div className="space-y-4">
