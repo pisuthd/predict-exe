@@ -10,6 +10,7 @@
         "deploy:1-deploy": "npm run build && tsx src/1-deploy.ts",
         "deploy:2-add-funds": "tsx src/2-add-funds.ts",
         "deploy:3-enable-automation": "tsx src/3-enable-automation.ts",
+        "deploy:4-set-oracle-price": "tsx src/4-set-oracle-price.ts",
         "history": "tsx src/check-history.ts",
         "prettier": "prettier '**/src/**/*.ts' --check && as-prettier --check assembly",
         "prettier:fix": "prettier '**/src/**/*.ts' --write && as-prettier --write assembly",
