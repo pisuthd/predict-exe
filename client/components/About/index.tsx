@@ -5,14 +5,13 @@ import { History, BarChart3, TrendingUp, TrendingDown, Clock, Trophy, Target, Za
 
 export const AboutContainer = () => {
   return (
-    <div className="min-h-screen bg-gradient-to-b from-black via-gray-950 to-black font-mono">
+    <div className="min-h-screen relative bg-gradient-to-b from-black via-gray-950 to-black font-mono">
       <div className="max-w-4xl mx-auto px-4 py-8">
         {/* Header */}
         <div className="bg-black border-2 border-green-500 mb-8">
           <div className="bg-green-500/20 border-b border-green-500/50 p-4">
-            <div className="flex items-center space-x-3">
-              <Shield className="w-6 h-6 text-green-500" />
-              <h1 className="text-2xl font-bold text-green-500 tracking-wider">ABOUT PREDICT-EXE</h1>
+            <div className="flex items-center space-x-3"> 
+              <h1 className="text-2xl font-bold text-green-500 tracking-wider">ABOUT PREDICT.EXE</h1>
             </div>
             <p className="text-gray-400 text-sm mt-1">Decentralized prediction markets on Massa Network</p>
           </div>

@@ -46,7 +46,7 @@ const MainPanel = () => {
     const downPercentage = (totalDownPool / totalPool * 100).toFixed(1);
 
     return (
-        <>
+        <section className='relative'>
             {/* Terminal Header */}
             <div className="mb-8">
                 <div className="bg-black border-2 border-cyan-500 p-4">
@@ -254,7 +254,7 @@ const MainPanel = () => {
                     </div>
                 </div>
             </div>
-        </>
+        </section>
     )
 }
 
