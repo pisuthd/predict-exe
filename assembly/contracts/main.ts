@@ -42,7 +42,7 @@ const ROUND_STATUS_SETTLED: u8 = 2;
 // const ROUND_STATUS_CANCELLED: u8 = 3;
 
 // Constants
-const ROUND_DURATION: u64 = 60 * 60 * 1000; // 60 minutes in milliseconds
+const ROUND_DURATION: u64 = 10 * 60 * 1000; // 10 minutes in milliseconds
 const BETTING_CUTOFF: u64 = 5 * 60 * 1000;  // Stop betting 5 min before end
 const MIN_BET_AMOUNT: u64 = 1_000_000_000;   // 1 MAS minimum bet
 const HOUSE_INITIAL_BALANCE: u64 = 100_000_000_000; // 100 MAS house reserve
@@ -51,11 +51,11 @@ const VIRTUAL_LIQUIDITY: u64 = 1_000_000_000_000; // 1000 MAS virtual liquidity 
 const HOUSE_EDGE: f64 = 0.05; // 5% house edge
 
 // Automation constants
-const AUTOMATION_GAS: u64 = 20_000_000; // Gas for automated calls
+const AUTOMATION_GAS: u64 = 50_000_000; // Gas for automated calls
 const PERIODS_PER_HOUR: u64 = 225; // ~16 seconds per period, 3600/16 = 225
-const ROUND_CREATION_PERIOD_OFFSET: u64 = PERIODS_PER_HOUR; // Create next round 1 hour ahead
+const PERIODS_PER_10_MIN: u64 = 38; // ~16 seconds per period, 600/16 = 37.5 ≈ 38
+const ROUND_CREATION_PERIOD_OFFSET: u64 = PERIODS_PER_10_MIN; // Create next round 10 minutes ahead
 const SETTLEMENT_PERIOD_OFFSET: u64 = 5; // Settle 5 periods after round ends
-
 
 export function constructor(_: StaticArray<u8>): void {
     if (!Context.isDeployingContract()) return;

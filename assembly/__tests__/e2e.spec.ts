@@ -71,7 +71,7 @@ describe('AMM Prediction Market Tests', () => {
             expect((roundCounter)).toBe(0);
             expect(houseEdge).toBe(0.05); // 5%
             expect((minBet)).toBe(1_000_000_000); // 1 MAS
-            expect((roundDuration)).toBe(60 * 60 * 1000); // 60 min
+            expect((roundDuration)).toBe(10 * 60 * 1000); // 10 min
             expect((virtualLiquidity)).toBe(1_000_000_000_000); // 1000 MAS
         });
         
@@ -95,7 +95,7 @@ describe('AMM Prediction Market Tests', () => {
             expect((currentRoundId)).toBe(1);
  
             expect(startPrice).toBe(110000.0);
-            expect((settlementTime - startTime)).toBe(60 * 60 * 1000);
+            expect((settlementTime - startTime)).toBe(10 * 60 * 1000);
         });
     });
     
