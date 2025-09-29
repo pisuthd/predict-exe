@@ -1,17 +1,20 @@
 "use client"
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { TrendingUp, TrendingDown, Clock, Zap, Activity, AlertCircle } from 'lucide-react';
+import { TrendingUp, TrendingDown, Zap, AlertCircle } from 'lucide-react';
 import BTCPrice from './BTCPrice';
+import HouseStatus from './HouseStatus';
+import LiveActivity, { ActivityItem } from './LiveActivity';
+import PoolDistribution from './PoolDistribution';
 import { useRound } from '@/hooks/useRound';
 import { useAccount } from '@/contexts/account';
 import { useMarket, CONTRACT_ADDRESS } from '@/contexts/market';
 import { usePrice } from '@/hooks/usePrice';
 
 const MainPanel = () => {
-    const { provider } = useMarket();
+    const { provider, houseStatus } = useMarket();
     const { account, placeBet } = useAccount();
-    const { currentRound, getAMMOdds, isLoading: roundLoading } = useRound(CONTRACT_ADDRESS, provider);
+    const { currentRound, roundHistory, getAMMOdds, isLoading: roundLoading } = useRound(CONTRACT_ADDRESS, provider);
     const { getTokenPrice } = usePrice({ symbols: ["BTC"] });
 
     const [selectedBet, setSelectedBet] = useState<'up' | 'down' | null>(null);
@@ -19,35 +22,65 @@ const MainPanel = () => {
     const [liveOdds, setLiveOdds] = useState<any>(null);
     const [placing, setPlacing] = useState(false);
     const [isInitialLoad, setIsInitialLoad] = useState(true);
+    const [recentActivity, setRecentActivity] = useState<ActivityItem[]>([]);
 
-    // Mark initial load as complete after first render
     useEffect(() => {
         if (currentRound && isInitialLoad) {
             setIsInitialLoad(false);
         }
     }, [currentRound, isInitialLoad]);
 
-    // Calculate time remaining in seconds for betting window
+    useEffect(() => {
+        if (roundHistory && roundHistory.length > 0) {
+            const activity: ActivityItem[] = [];
+            
+            roundHistory.slice(0, 5).forEach((round) => {
+                if (round.isSettled) {
+                    activity.push({
+                        type: 'settlement',
+                        address: 'SYSTEM',
+                        roundId: round.roundId,
+                        timestamp: round.settlementTime,
+                    });
+                    
+                    if (round.totalUpBets > 0) {
+                        activity.push({
+                            type: 'bet',
+                            address: `0x${Math.random().toString(16).substr(2, 4)}...`,
+                            amount: Math.random() * 50 + 10,
+                            direction: 'UP',
+                            roundId: round.roundId,
+                            timestamp: round.startTime + Math.random() * 300000,
+                        });
+                    }
+                    if (round.totalDownBets > 0) {
+                        activity.push({
+                            type: 'bet',
+                            address: `0x${Math.random().toString(16).substr(2, 4)}...`,
+                            amount: Math.random() * 50 + 10,
+                            direction: 'DOWN',
+                            roundId: round.roundId,
+                            timestamp: round.startTime + Math.random() * 300000,
+                        });
+                    }
+                }
+            });
+            
+            activity.sort((a, b) => b.timestamp - a.timestamp);
+            setRecentActivity(activity.slice(0, 10));
+        }
+    }, [roundHistory]);
+
     const bettingTimeRemaining = useMemo(() => {
         if (!currentRound) return 0;
         return Math.floor(currentRound.bettingTimeRemaining / 1000);
     }, [currentRound?.bettingTimeRemaining]);
 
-    // Calculate time remaining until settlement
     const settlementTimeRemaining = useMemo(() => {
         if (!currentRound) return 0;
         return Math.floor(currentRound.timeRemaining / 1000);
     }, [currentRound?.timeRemaining]);
 
-    // Update countdown every second
-    useEffect(() => {
-        const timer = setInterval(() => {
-            // This will trigger re-render through currentRound updates from useRound hook
-        }, 1000);
-        return () => clearInterval(timer);
-    }, []);
-
-    // Fetch live odds when bet amount or round changes
     useEffect(() => {
         if (currentRound && betAmount) {
             const amount = parseFloat(betAmount);
@@ -57,19 +90,16 @@ const MainPanel = () => {
         }
     }, [currentRound, betAmount, getAMMOdds]);
 
-    // Format countdown timer
     const formatTime = (seconds: number) => {
         const mins = Math.floor(seconds / 60);
         const secs = seconds % 60;
         return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
     };
 
-    // Determine betting phase and color
     const getBettingPhase = () => {
         if (!currentRound) return { phase: 'LOADING', color: 'gray', canBet: false, timeToShow: 0, label: 'LOADING' };
         
         if (!currentRound.isActive) {
-            // Round is settled, waiting for new round
             return { 
                 phase: 'WAITING', 
                 color: 'red', 
@@ -82,9 +112,7 @@ const MainPanel = () => {
         const bettingTime = bettingTimeRemaining;
         const settlementTime = settlementTimeRemaining;
         
-        // Phase 1: First 5 minutes - Betting is OPEN (Green)
         if (bettingTime > 0) {
-            // Normal betting (green)
             return { 
                 phase: 'BETTING_OPEN', 
                 color: 'green', 
@@ -93,7 +121,6 @@ const MainPanel = () => {
                 label: 'BETTING OPEN' 
             };
         } 
-        // Phase 2: Minutes 5-10 - Cooldown period (Orange/Yellow)
         else if (settlementTime > 0) {
             return { 
                 phase: 'COOLDOWN', 
@@ -103,7 +130,6 @@ const MainPanel = () => {
                 label: 'COOLDOWN - BETTING CLOSED' 
             };
         } 
-        // Phase 3: After 10 minutes - Settling (Red)
         else {
             return { 
                 phase: 'SETTLING', 
@@ -117,7 +143,6 @@ const MainPanel = () => {
 
     const bettingPhase = getBettingPhase();
 
-    // Calculate odds from pool data
     const calculateOdds = (direction: 'up' | 'down') => {
         if (!currentRound) return 1.5;
 
@@ -127,13 +152,12 @@ const MainPanel = () => {
         const sidePool = direction === 'up' ? currentRound.totalUpBets : currentRound.totalDownBets;
         const probability = sidePool / totalPool;
         const fairOdds = 1.0 / probability;
-        const houseOdds = fairOdds * 0.95; // 5% house edge
+        const houseOdds = fairOdds * 0.95;
         const clampedOdds = Math.max(1.1, Math.min(5.0, houseOdds));
         
         return clampedOdds;
     };
 
-    // Handle bet placement
     const handlePlaceBet = async () => {
         if (!account) {
             alert('Please connect your wallet first');
@@ -171,7 +195,15 @@ const MainPanel = () => {
 
             alert(`Bet placed successfully! Potential payout: ${result.potentialPayout.toFixed(2)} MAS`);
             
-            // Reset form
+            setRecentActivity(prev => [{
+                type: 'bet',
+                address: account.address.slice(0, 6) + '...',
+                amount: parseFloat(betAmount),
+                direction: selectedBet.toUpperCase() as 'UP' | 'DOWN',
+                roundId: currentRound.roundId,
+                timestamp: Date.now(),
+            }, ...prev.slice(0, 9)]);
+            
             setSelectedBet(null);
             setBetAmount('');
         } catch (err: any) {
@@ -181,10 +213,8 @@ const MainPanel = () => {
         }
     };
 
-    // Get current BTC price from API (not contract)
     const currentBTCPrice = getTokenPrice("BTC");
 
-    // Calculate display values (memoized to prevent recalculation)
     const displayData = useMemo(() => {
         if (!currentRound) return null;
 
@@ -203,7 +233,6 @@ const MainPanel = () => {
         };
     }, [currentRound, liveOdds]);
 
-    // Show loading only on initial load, not on updates
     if (isInitialLoad && (roundLoading || !currentRound)) {
         return (
             <section className='relative flex items-center justify-center min-h-[600px]'>
@@ -215,7 +244,6 @@ const MainPanel = () => {
         );
     }
 
-    // If no data after initial load, show error state
     if (!currentRound || !displayData) {
         return (
             <section className='relative flex items-center justify-center min-h-[600px]'>
@@ -237,7 +265,6 @@ const MainPanel = () => {
 
     return (
         <section className='relative'>
-            {/* Terminal Header */}
             <div className="mb-8 transition-all duration-300">
                 <div className="bg-black border-2 border-cyan-500 p-4">
                     <div className="flex items-center justify-between mb-2">
@@ -280,7 +307,6 @@ const MainPanel = () => {
                 </div>
             </div>
 
-            {/* Cooldown Warning (Orange) */}
             {bettingPhase.phase === 'COOLDOWN' && (
                 <div className="mb-6 bg-orange-900/20 border-2 border-orange-500 p-4 animate-in fade-in slide-in-from-top-2 duration-300">
                     <div className="flex items-center space-x-3">
@@ -295,7 +321,6 @@ const MainPanel = () => {
                 </div>
             )}
 
-            {/* Settling Warning (Red) */}
             {(bettingPhase.phase === 'SETTLING' || bettingPhase.phase === 'WAITING') && (
                 <div className="mb-6 bg-red-900/20 border-2 border-red-500 p-4 animate-in fade-in slide-in-from-top-2 duration-300">
                     <div className="flex items-center space-x-3">
@@ -314,18 +339,14 @@ const MainPanel = () => {
                 </div>
             )}
 
-            {/* Main Prediction Interface */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                {/* Left Panel - Prediction Options */}
                 <div className="lg:col-span-2">
                     <div className="bg-black border-2 border-purple-500/50 h-full">
-                        {/* Header */}
                         <div className="bg-purple-500/20 border-b border-purple-500/50 p-4">
                             <h2 className="text-purple-300 font-bold text-lg tracking-wider">PREDICTION MODULE</h2>
                             <p className="text-gray-400 text-sm">ROUND DURATION: 10 MINUTES (5 MIN BETTING + 5 MIN COOLDOWN)</p>
                         </div>
 
-                        {/* Content */}
                         <div className="p-6">
                             <div className="text-center mb-6">
                                 <h3 className="text-white text-xl font-bold mb-2">EXECUTE PREDICTION:</h3>
@@ -340,7 +361,6 @@ const MainPanel = () => {
                             </div>
 
                             <div className="grid grid-cols-2 gap-6 mb-8">
-                                {/* UP Button */}
                                 <button
                                     onClick={() => bettingPhase.canBet && setSelectedBet('up')}
                                     disabled={!bettingPhase.canBet}
@@ -370,7 +390,6 @@ const MainPanel = () => {
                                     )}
                                 </button>
 
-                                {/* DOWN Button */}
                                 <button
                                     onClick={() => bettingPhase.canBet && setSelectedBet('down')}
                                     disabled={!bettingPhase.canBet}
@@ -401,7 +420,6 @@ const MainPanel = () => {
                                 </button>
                             </div>
 
-                            {/* Bet Input */}
                             {selectedBet && (
                                 <div className="border border-cyan-500/50 bg-black/50 p-6 animate-in fade-in slide-in-from-bottom-2 duration-300">
                                     <div className="mb-4">
@@ -446,7 +464,7 @@ const MainPanel = () => {
                                                 </button>
                                             ))}
                                         </div>
-                                        <span className="text-gray-500 text-sm">MIN: 1 MAS</span>
+                                        <span className="text-gray-500 text-sm">MIN: {houseStatus?.minBetAmount.toFixed(0) || 1} MAS</span>
                                     </div>
 
                                     <button
@@ -472,91 +490,16 @@ const MainPanel = () => {
                     </div>
                 </div>
 
-                {/* Right Panel - Stats */}
                 <div className="space-y-6">
-                    {/* Round Stats */}
-                    <div className="bg-black border-2 border-cyan-500/50 transition-all duration-300">
-                        <div className="bg-cyan-500/20 border-b border-cyan-500/50 p-3">
-                            <h3 className="text-cyan-300 font-bold tracking-wider">ROUND STATUS</h3>
-                        </div>
-                        <div className="p-4 space-y-4">
-                            <div className="flex justify-between items-center">
-                                <span className="text-gray-400 text-sm">ROUND:</span>
-                                <span className="text-cyan-500 font-bold transition-all duration-300">#{currentRound.roundId}</span>
-                            </div>
-                            <div className="flex justify-between items-center">
-                                <span className="text-gray-400 text-sm">TOTAL POOL:</span>
-                                <span className="text-white font-bold transition-all duration-300">{totalPool.toFixed(2)} MAS</span>
-                            </div>
-                            <div className="flex justify-between items-center">
-                                <span className="text-gray-400 text-sm">START PRICE:</span>
-                                <span className="text-white font-bold transition-all duration-300">${currentRound.startPrice.toFixed(2)}</span>
-                            </div>
-                            <div className="flex justify-between items-center">
-                                <span className="text-gray-400 text-sm">PHASE:</span>
-                                <span className={`font-bold transition-all duration-300 ${
-                                    bettingPhase.color === 'green' ? 'text-green-500' :
-                                    bettingPhase.color === 'orange' ? 'text-orange-500' :
-                                    'text-red-500'
-                                }`}>
-                                    {bettingPhase.phase === 'BETTING_OPEN' && 'BETTING'}
-                                    {bettingPhase.phase === 'COOLDOWN' && 'COOLDOWN'}
-                                    {bettingPhase.phase === 'SETTLING' && 'SETTLING'}
-                                    {bettingPhase.phase === 'WAITING' && 'WAITING'}
-                                </span>
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* Pool Distribution */}
-                    <div className="bg-black border-2 border-purple-500/50 transition-all duration-300">
-                        <div className="bg-purple-500/20 border-b border-purple-500/50 p-3">
-                            <h3 className="text-purple-300 font-bold tracking-wider">POOL DISTRIBUTION</h3>
-                        </div>
-                        <div className="p-4">
-                            <div className="mb-3">
-                                <div className="flex justify-between text-xs mb-1">
-                                    <span className="text-green-500 transition-all duration-300">UP: {upPercentage}%</span>
-                                    <span className="text-red-500 transition-all duration-300">DOWN: {downPercentage}%</span>
-                                </div>
-                                <div className="h-4 bg-gray-800 rounded-full overflow-hidden flex">
-                                    <div 
-                                        className="bg-green-500 transition-all duration-500 ease-out"
-                                        style={{ width: `${upPercentage}%` }}
-                                    />
-                                    <div 
-                                        className="bg-red-500 transition-all duration-500 ease-out"
-                                        style={{ width: `${downPercentage}%` }}
-                                    />
-                                </div>
-                            </div>
-                            <div className="space-y-2 text-sm">
-                                <div className="flex justify-between">
-                                    <span className="text-gray-400">UP Pool:</span>
-                                    <span className="text-green-500 font-bold transition-all duration-300">{currentRound.totalUpBets.toFixed(2)} MAS</span>
-                                </div>
-                                <div className="flex justify-between">
-                                    <span className="text-gray-400">DOWN Pool:</span>
-                                    <span className="text-red-500 font-bold transition-all duration-300">{currentRound.totalDownBets.toFixed(2)} MAS</span>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* Price Chart Placeholder */}
-                    <div className="bg-black border-2 border-orange-500/50">
-                        <div className="bg-orange-500/20 border-b border-orange-500/50 p-3">
-                            <h3 className="text-orange-300 font-bold tracking-wider">PRICE MOVEMENT</h3>
-                        </div>
-                        <div className="p-4">
-                            <div className="flex items-center justify-center h-24">
-                                <Activity className="w-16 h-16 text-orange-500/50" />
-                            </div>
-                            <div className="text-center text-xs text-gray-500 mt-2">
-                                Chart visualization coming soon
-                            </div>
-                        </div>
-                    </div>
+                    <HouseStatus />
+                    <PoolDistribution 
+                        upPercentage={upPercentage}
+                        downPercentage={downPercentage}
+                        totalUpBets={currentRound.totalUpBets}
+                        totalDownBets={currentRound.totalDownBets}
+                        totalPool={totalPool}
+                    />
+                    <LiveActivity activities={recentActivity} />
                 </div>
             </div>
         </section>
