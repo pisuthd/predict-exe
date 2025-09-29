@@ -222,22 +222,18 @@ export const useRound = (contractAddress: string, provider: any) => {
   }, [provider, contractAddress]);
 
   // Auto-refresh current round every 5 seconds
-  // useEffect(() => {
-  //   fetchCurrentRound();
-  //   const interval = setInterval(fetchCurrentRound, 5000);
-  //   return () => clearInterval(interval);
-  // }, [fetchCurrentRound]);
-
   useEffect(() => {
-    fetchCurrentRound()
-  },[])
-
+    fetchCurrentRound();
+    const interval = setInterval(fetchCurrentRound, 5000);
+    return () => clearInterval(interval);
+  }, [fetchCurrentRound]);
+ 
   // Fetch history when current round changes
-  // useEffect(() => {
-  //   if (currentRound && currentRound.roundId > 1) {
-  //     fetchRoundHistory(10);
-  //   }
-  // }, [currentRound?.roundId]);
+  useEffect(() => {
+    if (currentRound && currentRound.roundId > 1) {
+      fetchRoundHistory(10);
+    }
+  }, [currentRound?.roundId]);
 
   return {
     currentRound,
