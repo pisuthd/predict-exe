@@ -41,8 +41,8 @@ describe('AMM Prediction Market Tests', () => {
         constructor(new Args().serialize());
         
         // Add house funds
-        mockBalance(OWNER_ADDRESS, 100_000_000_000_000)
-        mockTransferredCoins(100_000_000_000_000); // 100k MAS
+        mockBalance(OWNER_ADDRESS, 100_000_000_000)
+        mockTransferredCoins(100_000_000_000); // 100 MAS
         addHouseFunds();
         
         // Set initial price
@@ -108,7 +108,7 @@ describe('AMM Prediction Market Tests', () => {
             // Check initial odds
             const oddsResult = getAMMOdds(new Args()
                 .add<u64>(1) // roundId
-                .add<u64>(100_000_000_000) // 100 MAS bet
+                .add<u64>(10_000_000_000) // 10 MAS bet
                 .serialize()
             );
             
@@ -138,8 +138,8 @@ describe('AMM Prediction Market Tests', () => {
             
             // Place bet
             setDeployContext(USER1_ADDRESS);
-            mockBalance(USER1_ADDRESS, 100_000_000_000);
-            mockTransferredCoins(100_000_000_000); // 100 MAS
+            mockBalance(USER1_ADDRESS, 10_000_000_000);
+            mockTransferredCoins(10_000_000_000); // 10 MAS
             
             const betResult = placeBet(new Args()
                 .add<u64>(1) // roundId
@@ -151,7 +151,7 @@ describe('AMM Prediction Market Tests', () => {
             const betAmount = bet.nextU64().unwrap();
             const payout = bet.nextU64().unwrap();
             
-            expect((betAmount)).toBe(100_000_000_000);
+            expect((betAmount)).toBe(10_000_000_000);
             expect((payout)).toBeGreaterThan((betAmount)); // Should win more than bet
             
             // Check user bet was recorded
@@ -167,7 +167,7 @@ describe('AMM Prediction Market Tests', () => {
             const upBets = userBet.nextU64().unwrap();
             const downBets = userBet.nextU64().unwrap();
             
-            expect((upBets)).toBe(100_000_000_000);
+            expect((upBets)).toBe(10_000_000_000);
             expect((downBets)).toBe(0);
         });
         
@@ -178,14 +178,14 @@ describe('AMM Prediction Market Tests', () => {
             // Place large UP bet to create imbalance
             setDeployContext(USER1_ADDRESS);
             mockBalance(USER1_ADDRESS, 1_000_000_000_000);
-            mockTransferredCoins(500_000_000_000); // 500 MAS UP
+            mockTransferredCoins(50_000_000_000); // 50 MAS UP
             
             placeBet(new Args().add<u64>(1).add<bool>(true).serialize());
             
             // Check odds after imbalance
             const oddsResult = getAMMOdds(new Args()
                 .add<u64>(1)
-                .add<u64>(100_000_000_000) // 100 MAS potential bet
+                .add<u64>(10_000_000_000) // 10 MAS potential bet
                 .serialize()
             );
             
@@ -210,12 +210,12 @@ describe('AMM Prediction Market Tests', () => {
             // Place some bets
             setDeployContext(USER1_ADDRESS);
             mockBalance(USER1_ADDRESS, 1_000_000_000_000);
-            mockTransferredCoins(100_000_000_000); // 100 MAS UP
+            mockTransferredCoins(10_000_000_000); // 10 MAS UP
             placeBet(new Args().add<u64>(1).add<bool>(true).serialize());
             
             setDeployContext(USER2_ADDRESS);
             mockBalance(USER2_ADDRESS, 1_000_000_000_000);
-            mockTransferredCoins(50_000_000_000); // 50 MAS DOWN  
+            mockTransferredCoins(5_000_000_000); // 5 MAS DOWN  
             placeBet(new Args().add<u64>(1).add<bool>(false).serialize());
             
             // Fast forward to settlement time
