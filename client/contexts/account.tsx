@@ -99,7 +99,7 @@ const Provider = ({ children }: ProviderProps) => {
     const contract = new SmartContract(account, CONTRACT_ADDRESS);
 
     // Call placeBet with the bet amount
-    const operation = await contract.call(
+    const operation: any = await contract.call(
       'placeBet',
       betArgs,
       { coins: Mas.fromString(amount) }
@@ -163,7 +163,7 @@ const Provider = ({ children }: ProviderProps) => {
     const contract = new SmartContract(account, CONTRACT_ADDRESS);
 
     // Call claimWinnings
-    const operation = await contract.call(
+    const operation: any = await contract.call(
       'claimWinnings',
       claimArgs,
       { coins: Mas.fromString('0') } // No coins needed for claiming
