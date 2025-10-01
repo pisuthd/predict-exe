@@ -344,12 +344,12 @@ const MainPanel = () => {
                     <div className="bg-black border-2 border-purple-500/50 h-full">
                         <div className="bg-purple-500/20 border-b border-purple-500/50 p-4">
                             <h2 className="text-purple-300 font-bold text-lg tracking-wider">PREDICTION MODULE</h2>
-                            <p className="text-gray-400 text-sm">ROUND DURATION: 10 MINUTES (5 MIN BETTING + 5 MIN COOLDOWN)</p>
+                            <p className="text-gray-400 text-sm">ROUND DURATION: 60 MINUTES (40 MIN BETTING + 20 MIN COOLDOWN)</p>
                         </div>
 
                         <div className="p-6">
                             <div className="text-center mb-6">
-                                <h3 className="text-white text-xl font-bold mb-2">EXECUTE PREDICTION:</h3>
+                                <h3 className="text-white text-xl font-bold mb-2">QUESTION:</h3>
                                 <p className="text-gray-400 mb-2">
                                     Will BTC price move UP or DOWN by round settlement?
                                 </p>

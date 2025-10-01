@@ -2,7 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useReducer,
 import { JsonRpcProvider, SmartContract, Args } from '@massalabs/massa-web3'
 
 // Contract address 
-export const CONTRACT_ADDRESS = "AS12Lr1hJzJGknCZp8NT6aDQV3PWwXPoKP5PtaQozKfc1CSAsv1Ww"
+export const CONTRACT_ADDRESS = "AS12qRyc2fXDde1fqLXyDLTqUGR7dytiCQzd5V382ubyPCLcoHbu3"
 
 export interface OraclePrice {
   price: number;

@@ -3,6 +3,7 @@ import { useMarket } from '@/contexts/market';
 
 const HouseStatus = () => {
     const { houseStatus, automationStatus } = useMarket();
+ 
 
     return (
         <div className="bg-black border-2 border-cyan-500/50 transition-all duration-300 hover:border-cyan-500">
@@ -13,8 +14,7 @@ const HouseStatus = () => {
             </div>
             <div className="p-4 space-y-3">
                 <div className="flex justify-between items-center">
-                    <span className="text-gray-400 text-sm flex items-center space-x-1">
-                        <Coins className="w-4 h-4" />
+                    <span className="text-gray-400 text-sm flex items-center space-x-1"> 
                         <span>LIQUIDITY:</span>
                     </span>
                     <span className="text-white font-bold transition-all duration-300">
@@ -22,8 +22,7 @@ const HouseStatus = () => {
                     </span>
                 </div>
                 <div className="flex justify-between items-center">
-                    <span className="text-gray-400 text-sm flex items-center space-x-1">
-                        <Database className="w-4 h-4" />
+                    <span className="text-gray-400 text-sm flex items-center space-x-1"> 
                         <span>ROUNDS:</span>
                     </span>
                     <span className="text-cyan-500 font-bold transition-all duration-300">
@@ -31,17 +30,17 @@ const HouseStatus = () => {
                     </span>
                 </div>
                 <div className="flex justify-between items-center">
-                    <span className="text-gray-400 text-sm">HOUSE EDGE:</span>
+                    <span className="text-gray-400 text-sm">ROUND DURATION:</span>
                     <span className="text-yellow-500 font-bold">
-                        {houseStatus ? `${(houseStatus.houseEdge * 100).toFixed(1)}%` : '5.0%'}
+                        60 mins.
                     </span>
                 </div>
-                {/* <div className="flex justify-between items-center">
-                    <span className="text-gray-400 text-sm">VIRTUAL LIQ:</span>
+                <div className="flex justify-between items-center">
+                    <span className="text-gray-400 text-sm">BETTING CUTOFF:</span>
                     <span className="text-purple-500 font-bold">
-                        {houseStatus ? `${houseStatus.virtualLiquidity.toFixed(0)} MAS` : '1000 MAS'}
+                    20 mins.
                     </span>
-                </div> */}
+                </div>
                 {automationStatus && (
                     <div className="flex justify-between items-center pt-2 border-t border-gray-700">
                         <span className="text-gray-400 text-sm">AUTOMATION:</span>

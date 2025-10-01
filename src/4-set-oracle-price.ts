@@ -8,10 +8,10 @@ import {
     JsonRpcProvider,
 } from '@massalabs/massa-web3';
 
-const CONTRACT_ADDR = process.env.CONTRACT_ADDRESS || "AS12Lr1hJzJGknCZp8NT6aDQV3PWwXPoKP5PtaQozKfc1CSAsv1Ww";
+const CONTRACT_ADDR = process.env.CONTRACT_ADDRESS || "AS12qRyc2fXDde1fqLXyDLTqUGR7dytiCQzd5V382ubyPCLcoHbu3";
 
 // BTC Price to set (you can change this or pass as command line argument)
-const BTC_PRICE = process.argv[2] ? parseFloat(process.argv[2]) : 111732.34;
+const BTC_PRICE = process.argv[2] ? parseFloat(process.argv[2]) : 114574.36;
 
 const account = await Account.fromEnv();
 const provider = JsonRpcProvider.buildnet(account);

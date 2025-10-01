@@ -5,7 +5,7 @@ export const Footer = () => {
   return (
     <footer className="relative z-10 mt-16 border-t-2 border-cyan-500/50 bg-black/90 backdrop-blur-sm font-mono">
       {/* Main Footer Content */}
-      <div className="max-w-7xl mx-auto px-4 py-12">
+      {/* <div className="max-w-7xl mx-auto px-4 py-12">
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8"> 
           <div className="space-y-4">
             <div className="flex items-center space-x-3"> 
@@ -35,13 +35,7 @@ export const Footer = () => {
                 <a href="/history" className="text-gray-400 hover:text-cyan-500 transition-colors flex items-center space-x-2">
                   <span>HISTORY</span>
                 </a>
-              </li>
-              {/* <li>
-                <a href="/stats" className="text-gray-400 hover:text-cyan-500 transition-colors flex items-center space-x-2">
-                  <Zap className="w-3 h-3" />
-                  <span>STATISTICS</span>
-                </a>
-              </li> */}
+              </li> 
               <li>
                 <a href="/about" className="text-gray-400 hover:text-cyan-500 transition-colors flex items-center space-x-2">
                   <span>ABOUT</span>
@@ -49,8 +43,7 @@ export const Footer = () => {
               </li>
             </ul>
           </div>
-
-          {/* Technical Info */}
+ 
           {/* <div className="space-y-4">
             <h4 className="text-green-400 font-bold tracking-wider text-sm border-b border-green-500/30 pb-2">
               TECHNICAL
@@ -84,9 +77,8 @@ export const Footer = () => {
                 <span>MASSA NETWORK</span>
               </a>
             </div>
-          </div> */}
-
-          {/* Community & Legal */}
+          </div>  
+ 
           <div className="space-y-4">
             <h4 className="text-orange-400 font-bold tracking-wider text-sm border-b border-orange-500/30 pb-2">
               COMMUNITY
@@ -126,7 +118,7 @@ export const Footer = () => {
             </div>
           </div>
         </div>
-      </div>
+      </div> */}
 
       {/* Bottom Bar */}
       <div className="border-t border-gray-800">

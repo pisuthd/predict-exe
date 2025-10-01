@@ -37,13 +37,11 @@ const SETTLEMENT_CALL_PREFIX = 'SETTLEMENT_CALL_';
 
 // Round status enum
 const ROUND_STATUS_ACTIVE: u8 = 0;
-// const ROUND_STATUS_BETTING_CLOSED: u8 = 1;
-const ROUND_STATUS_SETTLED: u8 = 2;
-// const ROUND_STATUS_CANCELLED: u8 = 3;
+const ROUND_STATUS_SETTLED: u8 = 1;
 
 // Constants
-const ROUND_DURATION: u64 = 10 * 60 * 1000; // 10 minutes in milliseconds
-const BETTING_CUTOFF: u64 = 5 * 60 * 1000;  // Stop betting 5 min before end
+const ROUND_DURATION: u64 = 60 * 60 * 1000; // 60 minutes in milliseconds
+const BETTING_CUTOFF: u64 = 20 * 60 * 1000;  // Stop betting 20 min before end
 const MIN_BET_AMOUNT: u64 = 1_000_000_000;   // 1 MAS minimum bet
 const HOUSE_INITIAL_BALANCE: u64 = 100_000_000_000; // 100 MAS house reserve
 const MAX_PRICE_AGE: u64 = 5 * 60 * 1000; // 5 minutes in milliseconds
@@ -53,8 +51,8 @@ const HOUSE_EDGE: f64 = 0.05; // 5% house edge
 // Automation constants
 const AUTOMATION_GAS: u64 = 20_000_000; // Gas for automated calls
 const PERIODS_PER_HOUR: u64 = 225; // ~16 seconds per period, 3600/16 = 225
-const PERIODS_PER_10_MIN: u64 = 38; // ~16 seconds per period, 600/16 = 37.5 ≈ 38
-const ROUND_CREATION_PERIOD_OFFSET: u64 = PERIODS_PER_10_MIN; // Create next round 10 minutes ahead
+// const PERIODS_PER_10_MIN: u64 = 38; // ~16 seconds per period, 600/16 = 37.5 ≈ 38
+const ROUND_CREATION_PERIOD_OFFSET: u64 = PERIODS_PER_HOUR; // Create next round 10 minutes ahead
 const SETTLEMENT_PERIOD_OFFSET: u64 = 5; // Settle 5 periods after round ends
 
 export function constructor(_: StaticArray<u8>): void {
@@ -105,8 +103,7 @@ function calculateAMMPayout(
     betSide: bool, // true = UP, false = DOWN
     totalUpBets: u64,
     totalDownBets: u64
-): u64 {
-    // Add virtual liquidity to prevent extreme odds
+): u64 { 
     const adjustedUpBets = totalUpBets + VIRTUAL_LIQUIDITY;
     const adjustedDownBets = totalDownBets + VIRTUAL_LIQUIDITY;
     const totalAdjusted = adjustedUpBets + adjustedDownBets;
