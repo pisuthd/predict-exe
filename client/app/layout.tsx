@@ -11,8 +11,8 @@ const Font = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "MassaFlip",
-  description: "Retro prediction market on Massa Network",
+  title: "MassaFlip - MASSA's Deflationary Prediction Token",
+ description: "Predict MAS price movements with FLIP tokens. Starting at 1B supply, every loss burns tokens forever creating permanent scarcity.",
 };
 
 export default function RootLayout({
@@ -42,8 +42,8 @@ export default function RootLayout({
             </div>
  
             <Header />
-
-            <main className="  max-w-6xl mx-auto px-4 py-8">
+ 
+            <main className="">
               {children}
             </main>
 

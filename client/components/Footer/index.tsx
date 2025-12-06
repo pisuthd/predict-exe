@@ -1,41 +1,47 @@
 import React from 'react';
-import { Terminal, Github, Twitter, Globe, Zap, Shield, Code } from 'lucide-react';
+import { Github, Twitter, Globe, Zap, Trophy, Users } from 'lucide-react';
 
 export const Footer = () => {
   return (
     <footer className="relative z-10 mt-16 border-t-2 border-cyan-500/50 bg-black/90 backdrop-blur-sm font-mono">
       {/* Main Footer Content */}
-      {/* <div className="max-w-7xl mx-auto px-4 py-12">
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8"> 
+      <div className="max-w-7xl mx-auto px-4 py-12">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8"> 
           <div className="space-y-4">
             <div className="flex items-center space-x-3"> 
               <div>
-                <h3 className="text-xl font-bold text-cyan-500 tracking-wider">PREDICT.EXE</h3> 
+                <h3 className="text-xl font-bold text-cyan-500 tracking-wider">MassaFlip</h3> 
               </div>
             </div>
             <p className="text-gray-400 text-sm leading-relaxed">
-              Bet on crypto price moves every 10 minutes with rounds settled automatically through Massa ASC
+              Daily predictions and weekly seasons on the Massa Network. Earn Prediction Points and compete for exclusive rewards.
             </p>
             <div className="flex items-center space-x-2 text-xs">
               <div className="w-2 h-2 bg-green-500 animate-pulse"></div>
-              <span className="text-green-500">Live on Buildnet</span>
+              <span className="text-green-500">Live on Massa</span>
             </div>
           </div> 
+          
           <div className="space-y-4">
             <h4 className="text-purple-400 font-bold tracking-wider text-sm border-b border-purple-500/30 pb-2">
               NAVIGATION
             </h4>
             <ul className="space-y-2 text-sm">
               <li>
-                <a href="/trade" className="text-gray-400 hover:text-cyan-500 transition-colors flex items-center space-x-2">
-                  <span>TRADE</span>
+                <a href="/" className="text-gray-400 hover:text-cyan-500 transition-colors flex items-center space-x-2">
+                  <span>HOME</span>
                 </a>
               </li>
               <li>
-                <a href="/history" className="text-gray-400 hover:text-cyan-500 transition-colors flex items-center space-x-2">
-                  <span>HISTORY</span>
+                <a href="/dashboard" className="text-gray-400 hover:text-cyan-500 transition-colors flex items-center space-x-2">
+                  <span>DASHBOARD</span>
                 </a>
-              </li> 
+              </li>
+              <li>
+                <a href="/predict" className="text-gray-400 hover:text-cyan-500 transition-colors flex items-center space-x-2">
+                  <span>PREDICT</span>
+                </a>
+              </li>   
               <li>
                 <a href="/about" className="text-gray-400 hover:text-cyan-500 transition-colors flex items-center space-x-2">
                   <span>ABOUT</span>
@@ -44,26 +50,22 @@ export const Footer = () => {
             </ul>
           </div>
  
-          {/* <div className="space-y-4">
+          <div className="space-y-4">
             <h4 className="text-green-400 font-bold tracking-wider text-sm border-b border-green-500/30 pb-2">
-              TECHNICAL
+              FEATURES
             </h4>
             <ul className="space-y-2 text-sm">
-              <li className="flex justify-between">
-                <span className="text-gray-400">NETWORK:</span>
-                <span className="text-purple-400 font-bold">MASSA</span>
+              <li className="flex items-center space-x-2">
+                <Zap className="w-3 h-3 text-yellow-500" />
+                <span className="text-gray-400">Daily Predictions</span>
               </li>
-              <li className="flex justify-between">
-                <span className="text-gray-400">VERSION:</span>
-                <span className="text-cyan-400">1.0.0</span>
+              <li className="flex items-center space-x-2">
+                <Trophy className="w-3 h-3 text-purple-500" />
+                <span className="text-gray-400">Weekly Seasons</span>
               </li>
-              <li className="flex justify-between">
-                <span className="text-gray-400">UPTIME:</span>
-                <span className="text-green-400">99.9%</span>
-              </li>
-              <li className="flex justify-between">
-                <span className="text-gray-400">TPS:</span>
-                <span className="text-yellow-400">10,000+</span>
+              <li className="flex items-center space-x-2">
+                <Users className="w-3 h-3 text-cyan-500" />
+                <span className="text-gray-400">PP System</span>
               </li>
             </ul>
             <div className="pt-2">
@@ -118,36 +120,36 @@ export const Footer = () => {
             </div>
           </div>
         </div>
-      </div> */}
+      </div>
 
       {/* Bottom Bar */}
       <div className="border-t border-gray-800">
         <div className="max-w-7xl mx-auto px-4 py-4">
           <div className="flex flex-col md:flex-row justify-between items-center space-y-2 md:space-y-0">
             <div className="flex items-center space-x-4 text-xs text-gray-500">
-              <span>© 2025 PREDICT.EXE</span>
+              <span>© 2025 MassaFlip</span>
               <span>•</span>
               <span>BUILT ON MASSA NETWORK</span>
               <span>•</span>
-              <span>DECENTRALIZED PREDICTIONS</span>
+              <span>DAILY PREDICTIONS • WEEKLY SEASONS</span>
             </div>
 
-            {/* <div className="flex items-center space-x-4"> 
+            <div className="flex items-center space-x-4"> 
               <div className="flex items-center space-x-2 text-xs">
                 <div className="flex items-center space-x-1">
                   <div className="w-2 h-2 bg-green-500 animate-pulse"></div>
-                  <span className="text-green-500">API</span>
-                </div>
-                <div className="flex items-center space-x-1">
-                  <div className="w-2 h-2 bg-blue-500 animate-pulse"></div>
-                  <span className="text-blue-500">ORACLE</span>
+                  <span className="text-green-500">LIVE</span>
                 </div>
                 <div className="flex items-center space-x-1">
                   <div className="w-2 h-2 bg-purple-500 animate-pulse"></div>
                   <span className="text-purple-500">MASSA</span>
                 </div>
+                <div className="flex items-center space-x-1">
+                  <div className="w-2 h-2 bg-cyan-500 animate-pulse"></div>
+                  <span className="text-cyan-500">ASC</span>
+                </div>
               </div>
-            </div> */}
+            </div>
           </div>
         </div>
       </div>

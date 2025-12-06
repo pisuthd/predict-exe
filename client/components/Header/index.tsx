@@ -75,9 +75,11 @@ export const Header = () => {
 
                     {/* Navigation */}
                     <nav className="hidden md:flex items-center space-x-8 text-sm font-bold tracking-wider">
-                        <Link href="/" className={`  border-cyan-500 hover:text-cyan-500 transition-colors ${pathname === "/" ? "text-cyan-500 border-b-2 pb-1" : "text-gray-400"} `}>TRADE</Link>
-                        <Link href="/history" className={`  border-cyan-500 hover:text-cyan-500 transition-colors ${pathname === "/history" ? "text-cyan-500 border-b-2 pb-1" : "text-gray-400"} `}>HISTORY</Link> 
-                        <Link href="/about" className={`  border-cyan-500 hover:text-cyan-500 transition-colors ${pathname === "/about" ? "text-cyan-500 border-b-2 pb-1" : "text-gray-400"} `}>ABOUT</Link>
+                        <Link href="/" className={`border-cyan-500 hover:text-cyan-500 transition-colors ${pathname === "/" ? "text-cyan-500 border-b-2 pb-1" : "text-gray-400"}`}>HOME</Link>
+                        {/* <Link href="/dashboard" className={`border-cyan-500 hover:text-cyan-500 transition-colors ${pathname === "/dashboard" ? "text-cyan-500 border-b-2 pb-1" : "text-gray-400"}`}>DASHBOARD</Link> */}
+                        <Link href="/predict" className={`border-cyan-500 hover:text-cyan-500 transition-colors ${pathname === "/predict" ? "text-cyan-500 border-b-2 pb-1" : "text-gray-400"}`}>PREDICT</Link> 
+                        <Link href="/flip" className={`border-cyan-500 hover:text-cyan-500 transition-colors ${pathname === "/flip" ? "text-cyan-500 border-b-2 pb-1" : "text-gray-400"}`}>FLIP</Link>
+                        <Link href="/about" className={`border-cyan-500 hover:text-cyan-500 transition-colors ${pathname === "/about" ? "text-cyan-500 border-b-2 pb-1" : "text-gray-400"}`}>ABOUT</Link>
                     </nav>
 
                     {/* Terminal Status */}
