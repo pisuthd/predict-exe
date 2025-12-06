@@ -11,10 +11,9 @@ const Font = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Predict.EXE",
+  title: "MassaFlip",
   description: "Retro prediction market on Massa Network",
 };
-
 
 export default function RootLayout({
   children,

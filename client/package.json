@@ -1,5 +1,5 @@
 {
-  "name": "predict-client",
+  "name": "massa-flip-client",
   "version": "0.1.0",
   "private": true,
   "scripts": {
